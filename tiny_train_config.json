@@ -1,0 +1,24 @@
+{
+  "xy_loss": 0.5,
+  "wh_loss": 0.0625,
+  "cls_loss": 0.0625,
+  "conf_loss": 4,
+  "iou_thresh": 0.1,
+  "init_lr": 0.001,
+  "final_lr": -5.0,
+  "sgd_momentum": 0.9,
+  "weight_decay": 0.0005,
+  
+  "anchors": [[[20.18,  14.38], [45.79, 31.39], [80.75, 51.76]],
+              [[128.03, 72.70], [213.54, 122.64], [344.73, 205.27]]],
+
+  "name": "cars_div1_416",
+  "data_csv": "/home/druzhinin/HDD/Projects/Detection/Datasets/train/train_1000_and_10_000_nyc_pascal_nuscenes_mini_cars_cbcl_train_kitti.csv",
+  "kernels_divider": 1,
+  "image_size": 416,
+  "encoder": "darknet",
+  "in_channels": 3,
+  "epochs": 500,
+  "workers": 6,
+  "batch_size": 16
+}

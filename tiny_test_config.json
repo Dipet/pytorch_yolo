@@ -1,0 +1,24 @@
+{
+  "xy_loss": 0.5,
+  "wh_loss": 0.0625,
+  "cls_loss": 0.0625,
+  "conf_loss": 4,
+  "iou_thresh": 0.1,
+  "init_lr": 0.001,
+  "final_lr": -5.0,
+  "sgd_momentum": 0.9,
+  "weight_decay": 0.0005,
+  
+  "anchors": [[[21.15,   15.41], [57.30, 42.14], [114.98, 69.64]],
+              [[144.78, 175.30], [254.17, 120.92], [344.49, 237.29]]],
+
+  "name": "test",
+  "data_csv": "/home/druzhinin/HDD/Projects/Detection/Datasets/train/train_nyc.csv",
+  "in_channels": 3,
+  "encoder": "darknet",
+  "epochs": 500,
+  "workers": 6,
+  "batch_size": 16,
+  "kernels_divider": 1,
+  "image_size": 416
+}
