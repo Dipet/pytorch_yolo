@@ -1,0 +1,9 @@
+efficientnet-pytorch==0.2.0
+matplotlib>=2.2.3
+numpy>=1.16.3
+opencv-python>=4.1.0.25
+pycocotools>=2.1
+tensorboardX==1.7+b238cf6
+torch==1.1.0
+torchvision==0.3.0
+tqdm>=4.32.1
