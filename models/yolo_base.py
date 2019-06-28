@@ -57,6 +57,15 @@ class ConvBlock(nn.Module):
         self.sequence = nn.Sequential(*fused_sequence)
 
 
+class MaxPool(nn.MaxPool2d):
+    def __init__(self, size, stride):
+        if size == 2 and stride == 1:
+            super().__init__(size, stride, padding=1, dilation=2)
+        else:
+            pad = (size - 1) // 2
+            super().__init__(size, stride, padding=pad)
+
+
 class ConvPoolBlock(ConvBlock):
     def __init__(self,
                  in_channels,
@@ -68,18 +77,7 @@ class ConvPoolBlock(ConvBlock):
                  pool_stride=2):
         super().__init__(in_channels, out_channels,
                          conv_size, conv_stride, conv_pad)
-
-        pool_pad = (pool_size - 1) // 2
-
-        if pool_size == 2 and pool_stride == 1:
-            self.sequence.add_module('max_pool', nn.MaxPool2d(pool_size,
-                                                              pool_stride,
-                                                              padding=1,
-                                                              dilation=2))
-        else:
-            self.sequence.add_module('max_pool', nn.MaxPool2d(pool_size,
-                                                              pool_stride,
-                                                              padding=pool_pad,))
+        self.sequence.add_module('max_pool', MaxPool(pool_size, pool_stride))
 
 
 class YOLOBase(nn.Module):

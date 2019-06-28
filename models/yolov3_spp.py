@@ -2,40 +2,41 @@ import torch
 from torch import nn
 
 try:
-    from yolo_base import YOLOBase, ConvBlock, ConvPoolBlock
-    from yolo_layer import Concat, Upsample
+    from yolo_base import YOLOBase, ConvBlock, MaxPool
+    from yolo_layer import Concat, Upsample, YOLOLayer
 except:
-    from .yolo_base import YOLOBase, ConvBlock, ConvPoolBlock
-    from .yolo_layer import Concat, Upsample
+    from .yolo_base import YOLOBase, ConvBlock, MaxPool
+    from .yolo_layer import Concat, Upsample, YOLOLayer
 
 
 class DownSample(nn.Module):
-    def __init__(self, in_channels, out_channels, sizes, strides,
-                 continue_prev=False):
+    def __init__(self, in_channels, channels1, channels2, repeat=0):
         super().__init__()
 
-        assert len(sizes) == len(strides)
+        self._out_channels = channels1
+        self.conv0 = ConvBlock(in_channels, channels1, size=3, stride=2)
+        repeat += 1
 
-        self.conv0 = ConvBlock(in_channels, out_channels[0],
-                               size=sizes[0], stride=strides[0])
-        self.sequence = nn.Sequential()
-
-        prev = self.conv1
-        for i in range(1, len(sizes)):
-            module = ConvBlock(prev.out_channels, out_channels[i],
-                               size=sizes[i], stride=strides[i])
-
-            self.sequence.add_module(f'conv{i}', module)
-            prev = module
+        self.tail = nn.ModuleList()
+        for i in range(repeat):
+            self.tail.append(nn.Sequential(
+                ConvBlock(channels1, channels2, size=1, stride=1),
+                ConvBlock(channels2, channels1, size=3, stride=1)
+            ))
 
     def forward(self, x):
-        sub = self.conv0(x)
+        x = self.conv0(x)
+        sub = x
 
-        return sub + self.sequence(x)
+        for module in self.tail:
+            sub = module(x)
+            x += sub
+
+        return x, sub
 
     @property
     def out_channels(self):
-        return self.conv0.out_channels
+        return self._out_channels
 
 
 class YOLOv3SPP(YOLOBase):
@@ -46,25 +47,108 @@ class YOLOv3SPP(YOLOBase):
         # ======================================================================
         self.conv1 = ConvBlock(self.in_channels, 32, stride=1, size=3)
 
-        self.down1 = DownSample(self.conv1.out_channels,
-                                out_channels=[64, 32, 64],
-                                sizes=[3, 1, 3],
-                                strides=[2, 1, 1])
+        self.down = nn.ModuleList()
+        self.down.append(DownSample(self.conv1.out_channels, channels1=64, channels2=32, repeat=0))
+        self.down.append(DownSample(self.down[-1].out_channels, channels1=128, channels2=64, repeat=1))
+        self.down.append(DownSample(self.down[-1].out_channels, channels1=256, channels2=128, repeat=7))
+        self.down.append(DownSample(self.down[-1].out_channels, channels1=512, channels2=256, repeat=7))
+        self.down.append(DownSample(self.down[-1].out_channels, channels1=1024, channels2=512, repeat=3))
 
-        self.down2_1 = DownSample(self.down1.out_channels,
-                                  out_channels=[128, 64, 128],
-                                  sizes=[3, 1, 3],
-                                  strides=[2, 1, 1])
-        self.down2_2 = DownSample(self.down2_1.out_channels,
-                                  out_channels=[64, 128],
-                                  sizes=[3, 1, 3],
-                                  strides=[2, 1, 1])
+        self.sequence_spp = nn.Sequential()
+        self.sequence_spp.add_module('conv1', ConvBlock(self.down[-1].out_channels, 512, size=1, stride=1))
+        self.sequence_spp.add_module('conv2', ConvBlock(self.sequence_spp[-1].out_channels, 1024, size=3, stride=1))
+        self.sequence_spp.add_module('conv3', ConvBlock(self.sequence_spp[-1].out_channels, 512, size=1, stride=1))
+
+        self.spp1 = MaxPool(size=5, stride=1)
+        self.spp2 = MaxPool(size=9, stride=1)
+        self.spp3 = MaxPool(size=13, stride=1)
+
+        self.branch1_1 = nn.Sequential()
+        self.branch1_1.add_module('concat', Concat(1))
+        self.branch1_1.add_module('conv1', ConvBlock(self.sequence_spp[-1].out_channels * 4, 512, size=1, stride=1))
+        self.branch1_1.add_module('conv2', ConvBlock(self.branch1_1[-1].out_channels, 1024, size=3, stride=1))
+        self.branch1_1.add_module('conv3', ConvBlock(self.branch1_1[-1].out_channels, 512, size=1, stride=1))
+        self.branch1_2 = nn.Sequential()
+        self.branch1_2.add_module('conv1', ConvBlock(self.branch1_1[-1].out_channels, 1024, size=3, stride=1))
+        self.branch1_2.add_module('conv2', ConvBlock(self.branch1_2[-1].out_channels, self.yolo_layer_input_size, size=1, stride=1))
+
+        self.branch2_1 = nn.Sequential(ConvBlock(self.branch1_1[-1].out_channels, 256, size=1, stride=1),
+                                       Upsample(2))
+        self.branch2_2 = nn.Sequential()
+        self.branch2_2.add_module('concat', Concat(1))
+        self.branch2_2.add_module('conv1', ConvBlock(self.branch2_1[0].out_channels + self.down[3].out_channels, 256, size=1, stride=1))
+        self.branch2_2.add_module('conv2', ConvBlock(self.branch2_2[-1].out_channels, 512, size=3, stride=1))
+        self.branch2_2.add_module('conv3', ConvBlock(self.branch2_2[-1].out_channels, 256, size=1, stride=1))
+        self.branch2_2.add_module('conv4', ConvBlock(self.branch2_2[-1].out_channels, 512, size=3, stride=1))
+        self.branch2_2.add_module('conv5', ConvBlock(self.branch2_2[-1].out_channels, 256, size=1, stride=1))
+        self.branch2_3 = nn.Sequential()
+        self.branch2_3.add_module('conv6', ConvBlock(self.branch2_2[-1].out_channels, 512, size=3, stride=1))
+        self.branch2_3.add_module('conv7', ConvBlock(self.branch2_3[-1].out_channels, self.yolo_layer_input_size, size=1, stride=1))
+
+        self.branch3_1 = nn.Sequential(ConvBlock(self.branch2_2[-1].out_channels, 128, size=1, stride=1),
+                                       Upsample(2))
+        self.branch3_2 = nn.Sequential()
+        self.branch3_2.add_module('concat', Concat(1))
+        self.branch3_2.add_module('conv1', ConvBlock(self.branch3_1[0].out_channels + self.down[2].out_channels, 128, size=1, stride=1))
+        self.branch3_2.add_module('conv2', ConvBlock(self.branch3_2[-1].out_channels, 256, size=3, stride=1))
+        self.branch3_2.add_module('conv3', ConvBlock(self.branch3_2[-1].out_channels, 128, size=1, stride=1))
+        self.branch3_2.add_module('conv4', ConvBlock(self.branch3_2[-1].out_channels, 256, size=3, stride=1))
+        self.branch3_2.add_module('conv5', ConvBlock(self.branch3_2[-1].out_channels, 128, size=1, stride=1))
+        self.branch3_2.add_module('conv6', ConvBlock(self.branch3_2[-1].out_channels, 256, size=3, stride=1))
+        self.branch3_2.add_module('conv7', ConvBlock(self.branch3_2[-1].out_channels, self.yolo_layer_input_size, size=1, stride=1))
         # ======================================================================
 
         # YOLO Layers
         # ======================================================================
-        self.yolo1, self.yolo2 = self._create_yolo_layers()
+        self.yolo3, self.yolo2, self.yolo1 = self._create_yolo_layers()
         # ======================================================================
+
+    def _forward_encoder(self, x):
+        x = self.conv1(x)
+
+        downs = []
+        for module in self.down:
+            x, sub = module(x)
+            downs.append(sub)
+
+        x = self.sequence_spp(x)
+
+        x = self.branch1_1([self.spp1(x), self.spp2(x), self.spp3(x), x])
+        branch1 = self.branch1_2(x)
+
+        x = self.branch2_1(x)
+        x = self.branch2_2([x, downs[3]])
+        branch2 = self.branch2_3(x)
+
+        x = self.branch3_1(x)
+        branch3 = self.branch3_2([x, downs[2]])
+
+        return branch1, branch2, branch3
+
+    def forward(self, x):
+        img_size = max(x.shape[-2:])
+
+        # Encoder
+        # ======================================================================
+        branch1, branch2, branch3 = self._forward_encoder(x)
+        # ======================================================================
+
+        # YOLO
+        # ======================================================================
+        branch1 = self.yolo1(branch1, img_size)
+        branch2 = self.yolo2(branch2, img_size)
+        branch3 = self.yolo3(branch3, img_size)
+        # ======================================================================
+
+        out = [branch1, branch2, branch3]
+        if self.training:
+            return out
+        elif self.onnx:
+            output = torch.cat(out, 1)
+            return output[5:].t(), output[:4].t()
+
+        io, p = list(zip(*out))  # inference output, training output
+        return torch.cat(io, 1), p
 
     @property
     def yolo_layers(self):
@@ -83,41 +167,6 @@ class YOLOv3SPP(YOLOBase):
 
         self._save_weights(path, layers, warnings)
 
-    def _forward_encoder(self, x):
-        x = self.sequence_1(x)
-        x_route1 = x
-        x_route2 = self.sequence_2(x)
-
-        x_branch1 = self.sequence_branch1_1(x_route2)
-        x_branch1 = self.sequence_branch1_2([x_route1, x_branch1])
-
-        x_branch2 = self.sequence_branch2(x_route2)
-
-        return x_branch1, x_branch2
-
-    def forward(self, x):
-        img_size = max(x.shape[-2:])
-
-        # Encoder
-        # ======================================================================
-        x_branch1, x_branch2 = self._forward_encoder(x)
-        # ======================================================================
-
-        # YOLO
-        # ======================================================================
-        x_branch1 = self.yolo1(x_branch1, img_size)
-        x_branch2 = self.yolo2(x_branch2, img_size)
-        # ======================================================================
-
-        if self.training:
-            return [x_branch1, x_branch2]
-        elif self.onnx:
-            output = torch.cat([x_branch1, x_branch2], 1)
-            return output[5:].t(), output[:4].t()
-
-        io, p = list(zip(x_branch1, x_branch2))  # inference output, training output
-        return torch.cat(io, 1), p
-
     def fuse(self):
         for layer in self.modules():
             if isinstance(layer, ConvBlock):
@@ -127,10 +176,15 @@ class YOLOv3SPP(YOLOBase):
 if __name__ == '__main__':
     from tensorboardX import SummaryWriter
     from torch import onnx
+    from torchsummary import summary
 
     device = 'cuda'
-    model = YOLOv3SPP(n_class=1, onnx=False, in_shape=(1, 3, 320, 320)).to(device).eval()
+    model = YOLOv3SPP(n_class=80, onnx=False, in_shape=(1, 3, 320, 320),
+                      anchors=[[(10, 13), (16, 30), (33, 23)],
+                               [(30, 61), (62, 45), (59, 119)],
+                               [(116, 90), (156, 198), (373, 326)]]).to(device)
     dummy = torch.rand((1, 3, 320, 320)).to(device)
+    summary(model, input_size=(3, 608, 608))
     # onnx.export(model, dummy, 'test.onnx')
     # model(dummy)
     #

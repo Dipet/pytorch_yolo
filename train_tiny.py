@@ -239,9 +239,9 @@ def train(opt):
 
     # Mixed precision training https://github.com/NVIDIA/apex
     # install help: https://github.com/NVIDIA/apex/issues/259
-    if mixed:
-        from apex import amp
-        model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
+    # if mixed:
+    #     from apex import amp
+    #     model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
 
     best_loss = float('inf') if val_dataset is None else float('-inf')
 
