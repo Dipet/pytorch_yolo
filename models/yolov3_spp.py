@@ -30,7 +30,7 @@ class DownSample(nn.Module):
 
         for module in self.tail:
             sub = module(x)
-            x += sub
+            x = x + sub
 
         return x, sub
 
