@@ -152,7 +152,7 @@ class YOLOv3SPP(YOLOBase):
 
     @property
     def yolo_layers(self):
-        return self.yolo1, self.yolo2
+        return self.yolo1, self.yolo2, self.yolo3
 
     def load_darknet_weights(self, weights_path, warnings=True):
         layers = list(self.sequence_1) + list(self.sequence_2)
