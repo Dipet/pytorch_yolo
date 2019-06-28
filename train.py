@@ -21,6 +21,7 @@ from models.yolov3_tiny import YOLOv3Tiny
 from models.yolov3_tiny_mobilenet import YOLOv3TinyMobile as YOLOv3TinyMobile
 from models.yolov3_tiny_squeeze import YOLOv3TinySqueeze as YOLOv3TinySqueeze
 from models.yolov3_tiny_shuffle import YOLOv3TinyShuffle as YOLOv3TinyShuffle
+from models.yolov3_spp import YOLOv3SPP
 
 import tensorboardX
 
@@ -142,7 +143,7 @@ def train(opt):
     batch_size = opt.batch_size
     multi_scale = opt.multi_scale
     augment = not opt.no_aug
-    mixed = opt.mixed
+    # mixed = opt.mixed
     num_workers = opt.num_workers
     no_save = opt.no_save
     in_channels = opt.in_channels
@@ -210,14 +211,17 @@ def train(opt):
                             collate_fn=dataset.collate_fn)
 
     # Initialize model
-    if encoder == 'mobile':
-        yolo_class = YOLOv3TinyMobile
-    elif encoder == 'squeeze':
-        yolo_class = YOLOv3TinySqueeze
-    elif encoder == 'shuffle':
-        yolo_class = YOLOv3TinyShuffle
+    if opt.model == 'tiny':
+        if encoder == 'mobile':
+            yolo_class = YOLOv3TinyMobile
+        elif encoder == 'squeeze':
+            yolo_class = YOLOv3TinySqueeze
+        elif encoder == 'shuffle':
+            yolo_class = YOLOv3TinyShuffle
+        else:
+            yolo_class = YOLOv3Tiny
     else:
-        yolo_class = YOLOv3Tiny
+        yolo_class = YOLOv3SPP
     model = yolo_class(in_channels=in_channels,
                        n_class=dataset.cls_number,
                        anchors=hyper_params['anchors'],
@@ -395,6 +399,7 @@ if __name__ == '__main__':
     parser.add_argument('--logs_path', type=str, help='path to tensorboard logs', default='train_logs')
     parser.add_argument('-v', '--validate', type=str, help='path to validate dataset', default='')
     parser.add_argument('--encoder', type=str, help='encoder type', default='darknet', choices=['darknet', 'mobile', 'squeeze', 'shuffle'])
+    parser.add_argument('--model', type=str, help='supported models: tiny, spp', choices=['tiny', 'spp'], default='spp')
     parser.add_argument('--use_class_weights', action='store_true', help='use class weights')
     opt = parser.parse_args()
     print(opt)
