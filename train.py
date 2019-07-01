@@ -11,7 +11,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 
-from utils.dataset_csv import CSVDataset, CSVDatasetValidate
+from utils.dataset_csv import CSVDataset, CSVDatasetValidate, CSVDatasetVideo
 from utils.utils import init_seeds, compute_loss, non_max_suppression, test_model
 from utils.torch_utils import select_device
 from utils.plot_utils import plot_images
@@ -191,10 +191,11 @@ def train(opt):
     else:
         transform = None
 
+    dataset_cls = CSVDatasetVideo if opt.video else CSVDataset
 
     # Dataset
-    dataset = CSVDataset(data_csv_path, img_size, transform=transform,
-                         in_channels=in_channels)
+    dataset = dataset_cls(data_csv_path, img_size, transform=transform,
+                          in_channels=in_channels)
     if val_path:
         val_dataset = CSVDatasetValidate(val_path, img_size,
                                          in_channels=in_channels)
@@ -331,8 +332,9 @@ def train(opt):
         test_loss = results[4]
 
         if metrics is not None:
-            if metrics['AP'] > best_loss:
-                best_loss = metrics['AP']
+            test_loss = metrics['AP']
+            if test_loss > best_loss:
+                best_loss = test_loss
         else:
             if test_loss < best_loss:
                 best_loss = test_loss
@@ -342,7 +344,7 @@ def train(opt):
         if save:
             # Create checkpoint
             model_params = {'n_class': model.n_class,
-                            'onxx': model.onnx,
+                            'onnx': model.onnx,
                             'in_channels': in_channels,
                             'kernels_divider': kernels_divider,
                             'in_shape': model.in_shape,
@@ -367,8 +369,8 @@ def train(opt):
             print('Best saved:', best_weights)
 
             # Save backup every 10 epochs (optional)
-            if epoch > 0 and epoch % 10 == 0:
-                torch.save(chkpt, os.path.join(save_dir , f'backup{epoch}.pt'))
+            # if epoch > 0 and epoch % 10 == 0:
+            #     torch.save(chkpt, os.path.join(save_dir , f'backup{epoch}.pt'))
 
             # Delete checkpoint
             del chkpt
@@ -401,6 +403,7 @@ if __name__ == '__main__':
     parser.add_argument('--encoder', type=str, help='encoder type', default='darknet', choices=['darknet', 'mobile', 'squeeze', 'shuffle'])
     parser.add_argument('--model', type=str, help='supported models: tiny, spp', choices=['tiny', 'spp'], default='spp')
     parser.add_argument('--use_class_weights', action='store_true', help='use class weights')
+    parser.add_argument('--video', action='store_true', help='dataset is video')
     opt = parser.parse_args()
     print(opt)
 

@@ -108,10 +108,12 @@ class YOLOv3Tiny(YOLOBase):
 if __name__ == '__main__':
     from tensorboardX import SummaryWriter
     from torch import onnx
+    from torchsummary import summary
 
-    device = 'cuda'
+    device = 'cpu'
     model = YOLOv3Tiny(n_class=1, onnx=False, in_shape=(1, 3, 320, 320)).to(device).eval()
     dummy = torch.rand((1, 3, 320, 320)).to(device)
+    summary(model, (3, 608, 608), device=device)
     # onnx.export(model, dummy, 'test.onnx')
     # model(dummy)
     #

@@ -18,41 +18,50 @@ class RandomAffineYOLO:
                  translate=(0.1, 0.1),
                  scale=(0.9, 1.1),
                  shear=(-2, 2),
-                 border_value=(127.5, 127.5, 127.5)):
+                 border_value=(127.5, 127.5, 127.5),
+                 random_call=False):
         self.degrees = degrees
         self.translate = translate
         self.scale = scale
         self.shear = shear
         self.border_value = border_value
 
-    def __call__(self, data):
-        img, targets = _get_img_targets(data)
+        self.random_call = random_call
+        self._transform = np.eye(3)
 
-        height, width = img.shape[:2]
+    def random(self, height, width):
+        angle = random.uniform(self.degrees[0], self.degrees[1])
 
         # Rotation and Scale
         rot_mat = np.eye(3)
-        angle = random.uniform(self.degrees[0], self.degrees[1])
         scale = random.uniform(self.scale[0], self.scale[1])
         rot_mat[:2] = cv.getRotationMatrix2D(angle=angle,
-                                              center=(width / 2, height / 2),
-                                              scale=scale)
+                                             center=(width / 2, height / 2),
+                                             scale=scale)
 
         # Translation
-        trans_mat = np.eye(3)
-        trans_mat[0, 2] = random.uniform(-1, 1) * self.translate[0] * height
-        trans_mat[1, 2] = random.uniform(-1, 1) * self.translate[1] * width
+        trans = np.eye(3)
+        trans[0, 2] = random.uniform(-1, 1) * self.translate[0] * height
+        trans[1, 2] = random.uniform(-1, 1) * self.translate[1] * width
 
         # Shear
-        shear_mat = np.eye(3)
-        shear_mat[0, 1] = np.tan(np.deg2rad(random.uniform(self.shear[0],
-                                                           self.shear[1])))
-        shear_mat[1, 0] = np.tan(np.deg2rad(random.uniform(self.shear[0],
-                                                           self.shear[1])))
+        shear = np.eye(3)
+        shear[0, 1] = np.tan(np.deg2rad(random.uniform(self.shear[0],
+                                                       self.shear[1])))
+        shear[1, 0] = np.tan(np.deg2rad(random.uniform(self.shear[0],
+                                                       self.shear[1])))
 
-        transform_mat = shear_mat @ trans_mat @ rot_mat
+        self._transform = shear @ trans @ rot_mat
+
+    def __call__(self, data):
+        img, targets = _get_img_targets(data)
+        height, width = img.shape[:2]
+
+        if not self.random_call:
+            self.random(height, width)
+
         img = cv.warpPerspective(img,
-                                  transform_mat,
+                                  self._transform,
                                   dsize=(width, height),
                                   flags=cv.INTER_LINEAR,
                                   borderValue=self.border_value)
@@ -68,7 +77,7 @@ class RandomAffineYOLO:
             xy = np.ones((n * 4, 3))
             # x1y1, x2y2, x1y2, x2y1
             xy[:, :2] = points[:, [0, 1, 2, 3, 0, 3, 2, 1]].reshape(n * 4, 2)
-            xy = (xy @ transform_mat.T)[:, :2].reshape(n, 8)
+            xy = (xy @ self._transform.T)[:, :2].reshape(n, 8)
 
             # create new boxes
             x = xy[:, [0, 2, 4, 6]]
@@ -102,6 +111,9 @@ class LetterBox:
                  color=(127.5, 127.5, 127.5)):
         self.new_shape = new_shape
         self.color = color
+
+    def random(self):
+        pass
 
     def __call__(self, data):
         img, targets = _get_img_targets(data)
@@ -155,26 +167,33 @@ class LetterBox:
 
 
 class RandomHSVYOLO:
-    def __init__(self, fraction=0.5):
+    def __init__(self, fraction=0.5, random_call=False):
         self.fraction = fraction
+        self.random_call = random_call
+
+        self.d_sat = 1
+        self.d_val = 1
+
+    def random(self):
+        self.d_sat = random.uniform(-1, 1) * self.fraction + 1
+        self.d_val = random.uniform(-1, 1) * self.fraction + 1
 
     def __call__(self, data):
         img, targets = _get_img_targets(data)
+
+        if not self.random_call:
+            self.random()
 
         img_hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
 
         saturation = img_hsv[:, :, 1].astype(np.float32)
         value = img_hsv[:, :, 2].astype(np.float32)
 
-        d_sat = random.uniform(-1, 1) * self.fraction + 1
-        d_val = random.uniform(-1, 1) * self.fraction + 1
+        saturation *= self.d_sat
+        value *= self.d_val
 
-        saturation *= d_sat
-        value *= d_val
-
-        img_hsv[:, :, 1] = saturation if d_sat < 1 else saturation.clip(None,
-                                                                        255)
-        img_hsv[:, :, 2] = value if d_val < 1 else value.clip(None, 255)
+        img_hsv[:, :, 1] = saturation if self.d_sat < 1 else saturation.clip(None, 255)
+        img_hsv[:, :, 2] = value if self.d_val < 1 else value.clip(None, 255)
 
         img = cv.cvtColor(img_hsv, cv.COLOR_HSV2BGR)
 
@@ -185,7 +204,7 @@ class RandomHSVYOLO:
 
 
 class RandomFlip:
-    def __init__(self, x=False, y=True, target_format='xyxy'):
+    def __init__(self, x=False, y=True, target_format='xyxy', random_call=False):
         if not np.isin(target_format, ['xyhw', 'xyxy']):
             raise ValueError(f'Wrong format "{format}".'
                              'Supported: ["xyxy", "xyhw"]')
@@ -193,22 +212,31 @@ class RandomFlip:
         self.x = x
         self.y = y
         self.format = target_format
+        self.random_call = random_call
+        self.flip_code = None
+
+    def random(self):
+        self.flip_code = None
+        if self.y and random.random() > 0.5:
+            self.flip_code = 1
+
+        if self.x and random.random() > 0.5:
+            self.flip_code = -1 if self.flip_code else 0
 
     def __call__(self, data):
         img, targets = _get_img_targets(data)
         shape = img.shape
+        
+        if not self.random_call:
+            self.random()
 
-        flip_code = None
-        if self.y and random.random() > 0.5:
+        if self.flip_code in [-1, 1]:
             targets = self._y_flip(targets, shape)
-            flip_code = 1
-
-        if self.x and random.random() > 0.5:
+        if self.flip_code in [-1, 0]:
             targets = self._x_flip(targets, shape)
-            flip_code = -1 if flip_code else 0
 
-        if flip_code is not None:
-            img = cv.flip(img, flip_code)
+        if self.flip_code is not None:
+            img = cv.flip(img, self.flip_code)
 
         if targets is None:
             return img
@@ -251,6 +279,9 @@ class RandomFlip:
 class CheckChannels:
     def __init__(self, out_channels):
         self.out_channels = out_channels
+
+    def random(self):
+        pass
 
     def __call__(self, data):
         img, targets = _get_img_targets(data)

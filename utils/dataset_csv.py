@@ -1,5 +1,5 @@
 import os
-import cv2
+import cv2 as cv
 import numpy as np
 from torch.utils.data import Dataset
 from tqdm import tqdm
@@ -22,6 +22,8 @@ except:
 import json
 
 from pycocotools.coco import COCO
+
+from torchvision.transforms import Compose
 
 
 class CSVDataset(Dataset):  # for training/testing
@@ -108,7 +110,7 @@ class CSVDataset(Dataset):  # for training/testing
         img_path = self.img_files[index]
         labels = self.dataset[img_path].copy()
 
-        img = cv2.imread(img_path, cv2.IMREAD_COLOR)  # BGR
+        img = cv.imread(img_path, cv.IMREAD_COLOR)  # BGR
         assert img is not None, 'File Not Found ' + img_path
 
         labels[:, 1] = np.maximum(labels[:, 1], 0)
@@ -211,7 +213,7 @@ class CSVDatasetValidate(CSVDataset):
         img_path = self.img_files[index]
         labels = self.dataset[img_path].copy()
 
-        img = cv2.imread(img_path, cv2.IMREAD_COLOR)  # BGR
+        img = cv.imread(img_path, cv.IMREAD_COLOR)  # BGR
         orig_shape = img.shape[:2]
         assert img is not None, 'File Not Found ' + img_path
 
@@ -255,7 +257,7 @@ class CSVDatasetInference(CSVDataset):
         img_path = self.img_files[index]
         labels = self.dataset[img_path].copy()
 
-        img = cv2.imread(img_path, cv2.IMREAD_COLOR)  # BGR
+        img = cv.imread(img_path, cv.IMREAD_COLOR)  # BGR
         img0 = img.copy()
         assert img is not None, 'File Not Found ' + img_path
 
@@ -281,3 +283,147 @@ class CSVDatasetInference(CSVDataset):
 
         img = CSVDataset.equalize_shapes(img)
         return img, label, img0
+
+
+class CSVDatasetVideo(Dataset):  # for training/testing
+    def __init__(self,
+                 path,
+                 img_size=416,
+                 transform=None,
+                 in_channels=3,):
+        df = pd.read_csv(path)
+        if df['type'].dtype == np.object:
+            map_type = {j: i for i, j in enumerate(sorted(df['type'].unique()))}
+            df['type'] = df['type'].replace(map_type)
+
+        if min(df['type']) > 0: # Fix class
+            df['type'] -= 1
+        self.cls_number = len(df['type'].unique())
+        self.dataset = {}
+        self.class_weight = self.compute_labels_weights(df['type'])
+        self.letterbox = LetterBox((img_size, img_size))
+        self.check_channels = CheckChannels(in_channels)
+
+        dirpath, name = os.path.split(path)
+        labels_path = os.path.join(dirpath, 'labels_' + name)
+        if os.path.exists(labels_path):
+            self._labels = pd.read_csv(labels_path)['label'].values
+        else:
+            self._labels = np.array([str(i) for i in  sorted(df['type'].unique())])
+
+        for _, row in tqdm(df.iterrows(), total=len(df), desc='Parse csv file'):
+            path = row['image_path']
+
+            label = [row['type'],
+                     row['left'],
+                     row['top'],
+                     row['right'],
+                     row['bottom']]
+
+            if path in self.dataset:
+                self.dataset[path].append(label)
+            else:
+                self.dataset[path] = [label]
+
+        for i in list(self.dataset.keys()):
+            self.dataset[i] = np.array(self.dataset[i]).astype(float)
+
+        n = len(self.dataset)
+        assert n > 0, 'No images found in %s' % path
+
+        self.img_files = df['image_path'].unique()
+
+        self.transform = transform
+        self.prev = ''
+        self.subtractor = self.get_subtractor()
+        self.kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
+
+        if isinstance(self.transform, Compose):
+            for i in self.transform.transforms:
+                i.random_call = True
+        else:
+            self.transform.random_call = True
+
+    @staticmethod
+    def get_subtractor():
+        return cv.createBackgroundSubtractorMOG2(10, 4, detectShadows=False)
+
+    def use_transform(self, img, labels):
+        img, labels = self.letterbox((img, labels))
+        if self.transform:
+            img, labels = self.transform((img, labels))
+
+        mask = self.subtractor.apply(img)
+        mask = cv.morphologyEx(mask, cv.MORPH_OPEN, self.kernel)
+        mask = cv.morphologyEx(mask, cv.MORPH_CLOSE, self.kernel)
+
+        img = np.dstack([img, mask])
+
+        return img, labels
+
+    def compute_labels_weights(self, labels):
+        weights = np.bincount(labels)
+        weights[weights == 0] = 1
+        weights = 1 / weights
+        weights /= weights.sum()
+        return weights
+
+    @property
+    def labels(self):
+        return self._labels
+
+    def __len__(self):
+        return len(self.img_files)
+
+    def __getitem__(self, index):
+        img_path = self.img_files[index]
+
+        dir, _ = os.path.split(img_path)
+        if self.prev != dir:
+            self.subtractor = self.get_subtractor()
+
+            if isinstance(self.transform, Compose):
+                for i in self.transform.transforms:
+                    i.random()
+            else:
+                self.transform.random()
+
+        labels = self.dataset[img_path].copy()
+
+        img = cv.imread(img_path, cv.IMREAD_COLOR)  # BGR
+        assert img is not None, 'File Not Found ' + img_path
+
+        labels[:, 1] = np.maximum(labels[:, 1], 0)
+        labels[:, 2] = np.maximum(labels[:, 2], 0)
+        labels[:, 3] = np.minimum(labels[:, 3], img.shape[1] - 1)
+        labels[:, 4] = np.minimum(labels[:, 4], img.shape[0] - 1)
+
+        img, labels = self.use_transform(img, labels)
+
+        # Convert labels format
+        h, w = img.shape[:2]
+        labels[:, 1:] = xyxy2xywh(labels[:, 1:])
+        labels[:, (1, 3)] = labels[:, (1, 3)] / w
+        labels[:, (2, 4)] = labels[:, (2, 4)] / h
+
+        # Normalize 0-1
+        img = np.ascontiguousarray(img, dtype=np.float32)
+        img /= 255
+
+        # Add image index axis
+        result_labels = np.zeros((len(labels), 6), dtype=np.float32)
+        if len(labels):
+            result_labels[:, 1:] = labels
+
+        # To Pytorch format
+        img = np.transpose(img, (2, 0, 1))
+
+        return torch.from_numpy(img), torch.from_numpy(result_labels)
+
+    @staticmethod
+    def collate_fn(batch):
+        img, label = list(zip(*batch))  # transposed
+        for i, l in enumerate(label):
+            l[:, 0] = i  # add target image index for build_targets()
+
+        return CSVDataset.equalize_shapes(img, label)
