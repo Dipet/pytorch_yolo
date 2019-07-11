@@ -6,3 +6,7 @@ __pycache__
 
 # Visual Studio Code
 .vscode
+
+#
+dumps
+train_logs

@@ -14,7 +14,3 @@ This repo based on https://github.com/ultralytics/yolov3
 1. YOLOv3-spp
     - Classic Darknet74 encoder
 2. Direct conversion to OpenVINO with Darknet encoder.
-
-## Work in progress
-
-- Examples

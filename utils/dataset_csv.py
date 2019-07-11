@@ -78,11 +78,11 @@ class CSVDataset(Dataset):  # for training/testing
 
         self.transform = transform
 
-    def use_transform(self, img, labels):
-        img, labels = self.letterbox((img, labels))
+    def use_transform(self, data):
+        data = self.letterbox(data)
         if self.transform:
-            img, labels = self.transform((img, labels))
-        return self.check_channels((img, labels))
+            data = self.transform(data)
+        return self.check_channels(data)
 
     def compute_labels_weights(self, labels):
         weights = np.bincount(labels)
@@ -266,7 +266,7 @@ class CSVDatasetInference(CSVDataset):
         labels[:, 3] = np.minimum(labels[:, 3], img.shape[1] - 1)
         labels[:, 4] = np.minimum(labels[:, 4], img.shape[0] - 1)
 
-        img, labels = self.use_transform(img, labels)
+        img = self.use_transform(img)
 
         # Normalize 0-1
         img = np.ascontiguousarray(img, dtype=np.float32)
