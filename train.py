@@ -1,21 +1,20 @@
 import matplotlib
-matplotlib.use('Agg')
 
 import os
 import json
 import time
 import argparse
+import numpy as np
 
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torchvision.transforms import Compose
 
-from utils.dataset_csv import CSVDataset, CSVDatasetValidate, CSVDatasetVideo
-from utils.utils import init_seeds, compute_loss, non_max_suppression, test_model
+from utils.dataset_csv import CSVDataset, CSVDatasetValidate
+from utils.utils import (init_seeds, compute_loss,
+                         non_max_suppression, test_model)
 from utils.torch_utils import select_device
 from utils.plot_utils import plot_images
-from utils.augs import *
 
 from models.yolov3_tiny import YOLOv3Tiny
 from models.yolov3_tiny_mobilenet import YOLOv3TinyMobile as YOLOv3TinyMobile
@@ -27,6 +26,17 @@ import tensorboardX
 
 import shutil
 from datetime import datetime
+
+from utils.augs import LetterBox
+from albumentations import (
+    Compose,
+    HueSaturationValue,
+    HorizontalFlip,
+    IAAAffine,
+    ToGray,
+)
+
+matplotlib.use('Agg')
 
 
 def save_log(logs_writer: tensorboardX.SummaryWriter, model, mean_loss, imgs,
@@ -48,7 +58,8 @@ def save_log(logs_writer: tensorboardX.SummaryWriter, model, mean_loss, imgs,
         logs_writer.add_scalar('IOU', metrics['IOU'], epoch)
 
     if det is None:
-        logs_writer.add_image_with_boxes('example_result', imgs[0], np.array([]),
+        logs_writer.add_image_with_boxes('example_result',
+                                         imgs[0], np.array([]),
                                          epoch)
     else:
         labels = labels[det[:, -1].cpu().numpy().astype(int)]
@@ -64,7 +75,7 @@ def check_paths(save_dir, name, data_path: str, val_path, logs_path, no_save):
     if not val_path:
         prefix = 'train_'
         if data_name.startswith(prefix):
-            val_path =  'val_' + data_name[len(prefix):]
+            val_path = 'val_' + data_name[len(prefix):]
             val_path = os.path.join(data_dir, val_path)
             labels_path = 'labels_' + data_name[len(prefix):]
             labels_path = os.path.join(data_dir, labels_path)
@@ -141,12 +152,10 @@ def train(opt):
     img_size = opt.img_size
     epochs = opt.epochs
     batch_size = opt.batch_size
-    multi_scale = opt.multi_scale
     augment = not opt.no_aug
-    # mixed = opt.mixed
     num_workers = opt.num_workers
     no_save = opt.no_save
-    in_channels = opt.in_channels
+    in_channels = 1 if opt.gray else 3
     save_dir = opt.save_dir
     kernels_divider = opt.kernels_divider
     logs_path = opt.logs_path
@@ -173,32 +182,29 @@ def train(opt):
     init_seeds()
     device = select_device()
 
-    if multi_scale:
-        img_size = 608  # initiate with maximum multi_scale size
+    torch.backends.cudnn.benchmark = True
 
-        if num_workers != 0:
-            print('In multi scale mode forced num_workers=0', num_workers)
-            num_workers = 0  # bug https://github.com/ultralytics/yolov3/issues/174
-    else:
-        torch.backends.cudnn.benchmark = True  # unsuitable for multiscale
-
+    transform = []
     if augment:
-        transform = Compose([
-            # RandomHSVYOLO(),
-            RandomAffineYOLO(),
-            RandomFlip(),
-        ])
-    else:
-        transform = None
-
-    dataset_cls = CSVDatasetVideo if opt.video else CSVDataset
+        transform += [
+            LetterBox(new_shape=img_size),
+            HueSaturationValue(0, 0, 20, p=0.5),
+            IAAAffine(scale=[0.9, 1.1], translate_percent=[-0.1, 0.1],
+                      rotate=[-5, 5], shear=[-2, 2],
+                      cval=127.5, mode='constant', p=0.5),
+            HorizontalFlip(p=0.5),
+        ]
+    if opt.gray:
+        transform.append(ToGray(always_apply=True, p=1))
+    transform = Compose(transform, bbox_params={'format': 'pascal_voc'})
 
     # Dataset
-    dataset = dataset_cls(data_csv_path, img_size, transform=transform,
-                          in_channels=in_channels)
+    dataset = CSVDataset(data_csv_path, transform=transform)
     if val_path:
-        val_dataset = CSVDatasetValidate(val_path, img_size,
-                                         in_channels=in_channels)
+        val_dataset = CSVDatasetValidate(
+            val_path,
+            transform=Compose([LetterBox(img_size)],
+                              bbox_params={'format': 'pascal_voc'}),)
     else:
         val_dataset = None
     labels = dataset.labels
@@ -241,12 +247,6 @@ def train(opt):
     lf = lambda x: 1 - 10 ** (
                 hyper_params['final_lr'] * (1 - x / epochs))  # inverse exp ramp
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
-
-    # Mixed precision training https://github.com/NVIDIA/apex
-    # install help: https://github.com/NVIDIA/apex/issues/259
-    # if mixed:
-    #     from apex import amp
-    #     model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
 
     best_loss = float('inf') if val_dataset is None else float('-inf')
 
@@ -316,11 +316,6 @@ def train(opt):
                 '%g/%g' % (i, n_batches - 1), *mean_loss, n_targets, time.time() - t)
             print(s)
 
-            # Multi-Scale training (320 - 608 pixels) every 10 batches
-            if multi_scale and (i + 1) % 10 == 0:
-                dataset.img_size = random.choice(range(10, 20)) * 32
-                print('multi_scale img_size = %g' % dataset.img_size)
-
         if val_dataset is not None:
             metrics = test_model(model, val_dataset, batch_size,
                                  num_workers, device)
@@ -368,10 +363,6 @@ def train(opt):
             print('Latest saved:', latest_weights)
             print('Best saved:', best_weights)
 
-            # Save backup every 10 epochs (optional)
-            # if epoch > 0 and epoch % 10 == 0:
-            #     torch.save(chkpt, os.path.join(save_dir , f'backup{epoch}.pt'))
-
             # Delete checkpoint
             del chkpt
 
@@ -390,12 +381,11 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--img_size', type=int, default=608, help='inference size (pixels)')
     parser.add_argument('-e', '--epochs', type=int, default=273, help='number of epochs')
     parser.add_argument('-b', '--batch_size', type=int, default=8, help='size of each image batch')
-    parser.add_argument('-ms', '--multi_scale', action='store_true', help='random image sizes per batch 320 - 608')
     parser.add_argument('--no_aug', action='store_true', help='No augments')
     parser.add_argument('--mixed', action='store_true', help='Mixed precision')
     parser.add_argument('-nw', '--num_workers', type=int, default=6, help='number of Pytorch DataLoader workers')
     parser.add_argument('--no_save', action='store_true', help='do not save training results')
-    parser.add_argument('--in_channels', type=int, help='image color channels', default=3)
+    parser.add_argument('--gray', action='store_true', help='use gray image')
     parser.add_argument('--save_dir', type=str, help='Results save dir', default='dumps')
     parser.add_argument('--kernels_divider', type=int, help='kernels count divider', default=1)
     parser.add_argument('--logs_path', type=str, help='path to tensorboard logs', default='train_logs')
@@ -403,7 +393,6 @@ if __name__ == '__main__':
     parser.add_argument('--encoder', type=str, help='encoder type', default='darknet', choices=['darknet', 'mobile', 'squeeze', 'shuffle'])
     parser.add_argument('--model', type=str, help='supported models: tiny, spp', choices=['tiny', 'spp'], default='spp')
     parser.add_argument('--use_class_weights', action='store_true', help='use class weights')
-    parser.add_argument('--video', action='store_true', help='dataset is video')
     opt = parser.parse_args()
     print(opt)
 

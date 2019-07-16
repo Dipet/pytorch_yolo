@@ -6,119 +6,90 @@ from tqdm import tqdm
 
 import pandas as pd
 
-from multiprocessing import Value
-
 import torch
 
-try:
-    from utils import coco_helper
-    from utils import xyxy2xywh
-    from augs import LetterBox, CheckChannels
-except:
-    from . import coco_helper
-    from .utils import xyxy2xywh
-    from .augs import LetterBox, CheckChannels
+from .utils import coco_helper, xyxy2xywh
 
 import json
 
 from pycocotools.coco import COCO
 
-from torchvision.transforms import Compose
-
 
 class CSVDataset(Dataset):  # for training/testing
     def __init__(self,
                  path,
-                 img_size=416,
-                 transform=None,
-                 in_channels=3,):
+                 transform=None):
         df = pd.read_csv(path)
         if df['type'].dtype == np.object:
             map_type = {j: i for i, j in enumerate(sorted(df['type'].unique()))}
             df['type'] = df['type'].replace(map_type)
 
-        if min(df['type']) > 0: # Fix class
+        if min(df['type']) > 0:  # Fix class
             df['type'] -= 1
         self.cls_number = len(df['type'].unique())
-        self.dataset = {}
+        self._dataset = {}
         self.class_weight = self.compute_labels_weights(df['type'])
-        self.letterbox = LetterBox(img_size)
-        self.check_channels = CheckChannels(in_channels)
-
 
         dirpath, name = os.path.split(path)
         labels_path = os.path.join(dirpath, 'labels_' + name)
         if os.path.exists(labels_path):
             self._labels = pd.read_csv(labels_path)['label'].values
         else:
-            self._labels = np.array([str(i) for i in  sorted(df['type'].unique())])
+            self._labels = np.array([str(i) for i in sorted(df['type'].unique())])
 
         for _, row in tqdm(df.iterrows(), total=len(df), desc='Parse csv file'):
             path = row['image_path']
 
-            label = [row['type'],
-                     row['left'],
+            label = [row['left'],
                      row['top'],
                      row['right'],
-                     row['bottom']]
+                     row['bottom'],
+                     row['type']]
 
-            if path in self.dataset:
-                self.dataset[path].append(label)
+            if path in self._dataset:
+                self._dataset[path].append(label)
             else:
-                self.dataset[path] = [label]
+                self._dataset[path] = [label]
 
-        for i in list(self.dataset.keys()):
-            self.dataset[i] = np.array(self.dataset[i]).astype(float)
+        for i in list(self._dataset.keys()):
+            self._dataset[i] = np.array(self._dataset[i]).astype(float)
 
-        n = len(self.dataset)
+        n = len(self._dataset)
         assert n > 0, 'No images found in %s' % path
-        self._img_size = Value('i', img_size)
 
-        self.img_files = list(self.dataset.keys())
+        self._img_files = list(self._dataset.keys())
 
         self.transform = transform
 
-    def use_transform(self, data):
-        data = self.letterbox(data)
-        if self.transform:
-            data = self.transform(data)
-        return self.check_channels(data)
-
-    def compute_labels_weights(self, labels):
-        weights = np.bincount(labels)
-        weights[weights == 0] = 1
-        weights = 1 / weights
-        weights /= weights.sum()
-        return weights
-
-    @property
-    def img_size(self):
-        return self._img_size.value
-
-    @img_size.setter
-    def img_size(self, size):
-        self._img_size.value = size
-
-    @property
-    def labels(self):
-        return self._labels
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, index):
-        img_path = self.img_files[index]
-        labels = self.dataset[img_path].copy()
+    def _get_data(self, index):
+        img_path = self._img_files[index]
 
         img = cv.imread(img_path, cv.IMREAD_COLOR)  # BGR
         assert img is not None, 'File Not Found ' + img_path
+        labels = self._dataset[img_path].copy()
 
         labels[:, 1] = np.maximum(labels[:, 1], 0)
         labels[:, 2] = np.maximum(labels[:, 2], 0)
         labels[:, 3] = np.minimum(labels[:, 3], img.shape[1] - 1)
         labels[:, 4] = np.minimum(labels[:, 4], img.shape[0] - 1)
 
-        img, labels = self.use_transform(img, labels)
+        return img, labels
+
+    @staticmethod
+    def _convert_img_for_net(img):
+        # Normalize 0-1
+        img = np.ascontiguousarray(img, dtype=np.float32)
+        img /= 255
+
+        # To Pytorch format
+        img = np.transpose(img, (2, 0, 1))
+
+        return torch.from_numpy(img)
+
+    @staticmethod
+    def _convert_labels_for_net(labels, img):
+        # transform [x1, y1, x2, y2, cls] -> [cls, x1, y1, x2, y2]
+        labels[:, 1:], labels[:, 0] = labels[:, :4], labels[:, 4].copy()
 
         # Convert labels format
         h, w = img.shape[:2]
@@ -126,19 +97,50 @@ class CSVDataset(Dataset):  # for training/testing
         labels[:, (1, 3)] = labels[:, (1, 3)] / w
         labels[:, (2, 4)] = labels[:, (2, 4)] / h
 
-        # Normalize 0-1
-        img = np.ascontiguousarray(img, dtype=np.float32)
-        img /= 255
-
         # Add image index axis
         result_labels = np.zeros((len(labels), 6), dtype=np.float32)
-        if len(labels):
-            result_labels[:, 1:] = labels
+        result_labels[:, 1:] = labels
 
-        # To Pytorch format
-        img = np.transpose(img, (2, 0, 1))
+        return torch.from_numpy(result_labels)
 
-        return torch.from_numpy(img), torch.from_numpy(result_labels)
+    def use_transform(self, img, labels=None):
+        if labels is not None:
+            data = {'image': img,
+                    'bboxes': labels}
+        else:
+            data = {'image': img}
+
+        if self.transform:
+            data = self.transform(**data)
+
+        if labels is not None:
+            labels = (np.array(data['bboxes'])
+                      if len(data['bboxes'])
+                      else np.zeros((0,) + labels.shape[1:]))
+            return data['image'], labels
+
+        return data['image']
+
+    @staticmethod
+    def compute_labels_weights(labels):
+        weights = np.bincount(labels)
+        weights[weights == 0] = 1
+        weights = 1 / weights
+        weights /= weights.sum()
+        return weights
+
+    @property
+    def labels(self):
+        return self._labels
+
+    def __len__(self):
+        return len(self._dataset)
+
+    def __getitem__(self, index):
+        img, labels = self._get_data(index)
+        img, labels = self.use_transform(img, labels)
+        return (self._convert_img_for_net(img),
+                self._convert_labels_for_net(labels, img))
 
     @staticmethod
     def equalize_shapes(images, labels=None):
@@ -179,7 +181,6 @@ class CSVDataset(Dataset):  # for training/testing
 
         return torch.stack(images, 0).float()
 
-
     @staticmethod
     def collate_fn(batch):
         img, label = list(zip(*batch))  # transposed
@@ -192,10 +193,8 @@ class CSVDataset(Dataset):  # for training/testing
 class CSVDatasetValidate(CSVDataset):
     def __init__(self,
                  path,
-                 img_size=416,
-                 transform=None,
-                 **kwargs):
-        super().__init__(path, img_size, transform, **kwargs)
+                 transform=None):
+        super().__init__(path, transform)
         df = pd.read_csv(path)
 
         dirpath, coco_path = os.path.split(path)
@@ -209,221 +208,20 @@ class CSVDatasetValidate(CSVDataset):
                 json.dump(coco, file)
         self.coco = COCO(coco_path)
 
-    def __getitem__(self, index):
-        img_path = self.img_files[index]
-        labels = self.dataset[img_path].copy()
-
-        img = cv.imread(img_path, cv.IMREAD_COLOR)  # BGR
-        orig_shape = img.shape[:2]
-        assert img is not None, 'File Not Found ' + img_path
-
-        labels[:, 1] = np.maximum(labels[:, 1], 0)
-        labels[:, 2] = np.maximum(labels[:, 2], 0)
-        labels[:, 3] = np.minimum(labels[:, 3], img.shape[1] - 1)
-        labels[:, 4] = np.minimum(labels[:, 4], img.shape[0] - 1)
-
-        img, labels = self.use_transform(img, labels)
-
-        # Normalize 0-1
-        img = np.ascontiguousarray(img, dtype=np.float32)
-        img /= 255
-
-        # To Pytorch format
-        img = np.transpose(img, (2, 0, 1))
-        result_labels = np.zeros((len(labels), 6))
-        result_labels[:, 1:] = labels
-
-        return (torch.from_numpy(img), result_labels, img_path, orig_shape)
-
-    @staticmethod
-    def collate_fn(batch):
-        img, label, img_path, orig_shape = list(zip(*batch))  # transposed
-        for i, l in enumerate(label):
-            l[:, 0] = i  # add target image index for build_targets()
-
-        img = CSVDataset.equalize_shapes(img)
-        return img, np.concatenate(label), img_path, orig_shape
-
 
 class CSVDatasetInference(CSVDataset):
     def __init__(self,
                  path,
-                 img_size=416,
-                 transform=None,
-                 **kwargs):
-        super().__init__(path, img_size, transform, **kwargs)
+                 transform=None):
+        super().__init__(path, transform)
 
     def __getitem__(self, index):
-        img_path = self.img_files[index]
-        labels = self.dataset[img_path].copy()
-
-        img = cv.imread(img_path, cv.IMREAD_COLOR)  # BGR
-        img0 = img.copy()
-        assert img is not None, 'File Not Found ' + img_path
-
-        labels[:, 1] = np.maximum(labels[:, 1], 0)
-        labels[:, 2] = np.maximum(labels[:, 2], 0)
-        labels[:, 3] = np.minimum(labels[:, 3], img.shape[1] - 1)
-        labels[:, 4] = np.minimum(labels[:, 4], img.shape[0] - 1)
-
-        img = self.use_transform(img)
-
-        # Normalize 0-1
-        img = np.ascontiguousarray(img, dtype=np.float32)
-        img /= 255
-
-        # To Pytorch format
-        img = np.transpose(img, (2, 0, 1))
-
-        return torch.from_numpy(img), labels, img0
+        img0, labels = self._get_data(index)
+        img = self.use_transform(img0)
+        return self._convert_img_for_net(img), labels, img0
 
     @staticmethod
     def collate_fn(batch):
-        img, label, img0 = list(zip(*batch))  # transposed
-
+        img, label, img0 = list(zip(*batch))
         img = CSVDataset.equalize_shapes(img)
         return img, label, img0
-
-
-class CSVDatasetVideo(Dataset):  # for training/testing
-    def __init__(self,
-                 path,
-                 img_size=416,
-                 transform=None,
-                 in_channels=3,):
-        df = pd.read_csv(path)
-        if df['type'].dtype == np.object:
-            map_type = {j: i for i, j in enumerate(sorted(df['type'].unique()))}
-            df['type'] = df['type'].replace(map_type)
-
-        if min(df['type']) > 0: # Fix class
-            df['type'] -= 1
-        self.cls_number = len(df['type'].unique())
-        self.dataset = {}
-        self.class_weight = self.compute_labels_weights(df['type'])
-        self.letterbox = LetterBox((img_size, img_size))
-        self.check_channels = CheckChannels(in_channels)
-
-        dirpath, name = os.path.split(path)
-        labels_path = os.path.join(dirpath, 'labels_' + name)
-        if os.path.exists(labels_path):
-            self._labels = pd.read_csv(labels_path)['label'].values
-        else:
-            self._labels = np.array([str(i) for i in  sorted(df['type'].unique())])
-
-        for _, row in tqdm(df.iterrows(), total=len(df), desc='Parse csv file'):
-            path = row['image_path']
-
-            label = [row['type'],
-                     row['left'],
-                     row['top'],
-                     row['right'],
-                     row['bottom']]
-
-            if path in self.dataset:
-                self.dataset[path].append(label)
-            else:
-                self.dataset[path] = [label]
-
-        for i in list(self.dataset.keys()):
-            self.dataset[i] = np.array(self.dataset[i]).astype(float)
-
-        n = len(self.dataset)
-        assert n > 0, 'No images found in %s' % path
-
-        self.img_files = df['image_path'].unique()
-
-        self.transform = transform
-        self.prev = ''
-        self.subtractor = self.get_subtractor()
-        self.kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
-
-        if isinstance(self.transform, Compose):
-            for i in self.transform.transforms:
-                i.random_call = True
-        else:
-            self.transform.random_call = True
-
-    @staticmethod
-    def get_subtractor():
-        return cv.createBackgroundSubtractorMOG2(10, 4, detectShadows=False)
-
-    def use_transform(self, img, labels):
-        img, labels = self.letterbox((img, labels))
-        if self.transform:
-            img, labels = self.transform((img, labels))
-
-        mask = self.subtractor.apply(img)
-        mask = cv.morphologyEx(mask, cv.MORPH_OPEN, self.kernel)
-        mask = cv.morphologyEx(mask, cv.MORPH_CLOSE, self.kernel)
-
-        img = np.dstack([img, mask])
-
-        return img, labels
-
-    def compute_labels_weights(self, labels):
-        weights = np.bincount(labels)
-        weights[weights == 0] = 1
-        weights = 1 / weights
-        weights /= weights.sum()
-        return weights
-
-    @property
-    def labels(self):
-        return self._labels
-
-    def __len__(self):
-        return len(self.img_files)
-
-    def __getitem__(self, index):
-        img_path = self.img_files[index]
-
-        dir, _ = os.path.split(img_path)
-        if self.prev != dir:
-            self.subtractor = self.get_subtractor()
-
-            if isinstance(self.transform, Compose):
-                for i in self.transform.transforms:
-                    i.random()
-            else:
-                self.transform.random()
-
-        labels = self.dataset[img_path].copy()
-
-        img = cv.imread(img_path, cv.IMREAD_COLOR)  # BGR
-        assert img is not None, 'File Not Found ' + img_path
-
-        labels[:, 1] = np.maximum(labels[:, 1], 0)
-        labels[:, 2] = np.maximum(labels[:, 2], 0)
-        labels[:, 3] = np.minimum(labels[:, 3], img.shape[1] - 1)
-        labels[:, 4] = np.minimum(labels[:, 4], img.shape[0] - 1)
-
-        img, labels = self.use_transform(img, labels)
-
-        # Convert labels format
-        h, w = img.shape[:2]
-        labels[:, 1:] = xyxy2xywh(labels[:, 1:])
-        labels[:, (1, 3)] = labels[:, (1, 3)] / w
-        labels[:, (2, 4)] = labels[:, (2, 4)] / h
-
-        # Normalize 0-1
-        img = np.ascontiguousarray(img, dtype=np.float32)
-        img /= 255
-
-        # Add image index axis
-        result_labels = np.zeros((len(labels), 6), dtype=np.float32)
-        if len(labels):
-            result_labels[:, 1:] = labels
-
-        # To Pytorch format
-        img = np.transpose(img, (2, 0, 1))
-
-        return torch.from_numpy(img), torch.from_numpy(result_labels)
-
-    @staticmethod
-    def collate_fn(batch):
-        img, label = list(zip(*batch))  # transposed
-        for i, l in enumerate(label):
-            l[:, 0] = i  # add target image index for build_targets()
-
-        return CSVDataset.equalize_shapes(img, label)
