@@ -5,9 +5,11 @@ from .layers import *
 from torch import nn
 from collections import OrderedDict
 from models.yolo_layer import Upsample, Concat, YOLOLayer
+from models.yolov3_spp import Add
 from tensorboardX.pytorch_graph import GraphPy
 
 from xml.dom import minidom
+from models.yolo_base import MaxPool
 
 
 class OpenVINOGraph:
@@ -19,6 +21,8 @@ class OpenVINOGraph:
         Upsample: OpenVINOResample,
         Concat: OpenVINOConcat,
         YOLOLayer: OpenVINORegionYolo,
+        MaxPool: OpenVINOMaxPool,
+        Add: OpenVINOAdd,
     }
 
     def __init__(self, layers, precision='FP16'):
@@ -36,16 +40,38 @@ class OpenVINOGraph:
                                          *args, **kwargs)
 
     def create_layers(self):
+        input_is_set = False
+        flag_input = False
+        need_add = {}
         for key, item in self.layers.items():
-            for inp, size in item['inputs'].items():
-                if inp == 'input':
+            if not input_is_set:
+                for inp, size in item['inputs'].items():
+                    input_is_set = True
                     self.add_layer(inp, OpenVINOInput, out_size=size,)
 
-            inputs = {i: self.openvino_layers[i].out_size for i in item['inputs']}  # need for concat
+            inputs = {}
+            for i in item['inputs']:
+                if not flag_input or i.find('.') != -1:
+                    if i in self.openvino_layers:
+                       inputs[i] = self.openvino_layers[i].out_size
+                    else:
+                        if i in need_add:
+                            need_add[i].append(key)
+                        else:
+                            need_add[i] = [key]
+
+            if input_is_set:
+                flag_input = True
             self.add_layer(key, self.map_layers[item['module'].__class__],
                            inputs=inputs,
                            out_size=item['out_size'],
                            module=item['module'])
+
+            if key in need_add:
+                items = need_add.pop(key)
+
+                for item in items:
+                    self.openvino_layers[item].update_inputs(key)
 
         return self.openvino_layers
 
@@ -139,7 +165,11 @@ class ModelGraph(GraphPy):
             if item_name == obj.__class__.__name__:
                 continue
 
-            res_obj = getattr(res_obj, item_name, None)
+            _obj = getattr(res_obj, item_name, None)
+            if _obj is None:
+                continue
+
+            res_obj = _obj
 
         return res_obj
 

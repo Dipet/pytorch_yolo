@@ -36,17 +36,23 @@ class OpenVINOLayer:
         self.blobs = {}
         self.data = {}
 
-        i = 0
         self._input_ports = {}
+        self.output_port = 0
         if inputs:
-            for name, item in inputs.items():
-                self._input_ports[name] = i
-                i += 1
-
-        self.output_port = i
+            self.update_inputs(inputs)
 
     def input_port(self, name):
         return self._input_ports[name]
+
+    def update_inputs(self, inputs):
+        if not isinstance(inputs, dict):
+            inputs = {inputs: None, **self._input_ports}
+
+        i = 0
+        for name, item in inputs.items():
+            self._input_ports[name] = i
+            i += 1
+        self.output_port = i
 
     def get_xml(self, blob_buff: bytearray):
         element = ET.Element('layer',
@@ -195,3 +201,12 @@ class OpenVINOLeakyReLU(OpenVINOLayer):
         super().__init__(*args, **kwargs)
 
         self.data['negative_slope'] = str(0.1)
+
+
+class OpenVINOAdd(OpenVINOLayer):
+    type = 'Eltwise'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.data['operation'] = 'sum'
