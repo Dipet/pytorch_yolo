@@ -4,7 +4,7 @@ from torch import jit
 from torch import onnx
 from tensorboardX.pytorch_graph import NodePyIO, NodePyOP
 
-from openvino_converter.graph import ModelGraph
+from pytorch_yolo.openvino_converter import ModelGraph
 
 
 __all__ = ['OpenVINOConverter']
@@ -64,11 +64,8 @@ if __name__ == '__main__':
         def forward(self, x):
             return self.conv(x)
 
-    from models.yolov3_tiny import YOLOv3Tiny
-    from models.yolov3_spp import YOLOv3SPP
-    from models.yolov3 import YOLOv3
-    from tensorboardX import SummaryWriter
-    from models.lite_yolo import LiteYOLOv3
+
+    from pytorch_yolo.models import LiteYOLOv3
 
     device = 'cpu'
     img_size = 416

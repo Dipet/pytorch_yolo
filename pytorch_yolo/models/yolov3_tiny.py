@@ -106,10 +106,8 @@ class YOLOv3Tiny(YOLOBase):
 
 
 if __name__ == '__main__':
-    from tensorboardX import SummaryWriter
-    from torch import onnx
     from torchsummary import summary
-    from models.yolov3_spp import YOLOv3SPP
+    from pytorch_yolo.models import YOLOv3SPP
 
     device = 'cpu'
     model = YOLOv3SPP(n_class=1, in_channels=1, onnx=False, in_shape=(1, 1, 416, 416), kernels_divider=1,

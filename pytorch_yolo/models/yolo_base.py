@@ -7,11 +7,11 @@ from torch import nn
 from collections import OrderedDict
 
 try:
-    from ..utils.torch_utils import fuse_conv_and_bn
+    from pytorch_yolo.utils.torch_utils import fuse_conv_and_bn
     from .yolo_layer import YOLOLayer
 except:
-    from utils.torch_utils import fuse_conv_and_bn
-    from models.yolo_layer import YOLOLayer
+    from pytorch_yolo.utils.torch_utils import fuse_conv_and_bn
+    from pytorch_yolo.models.yolo_layer import YOLOLayer
 
 from abc import abstractclassmethod
 
