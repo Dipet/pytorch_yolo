@@ -10,11 +10,11 @@ import matplotlib.pyplot as plt
 
 from .utils import xywh2xyxy
 
-matplotlib.rc('font', **{'size': 12})
+matplotlib.rc("font", **{"size": 12})
 
 # Set printoptions
-torch.set_printoptions(linewidth=1320, precision=5, profile='long')
-np.set_printoptions(linewidth=320, formatter={'float_kind': '{:11.5g}'.format})
+torch.set_printoptions(linewidth=1320, precision=5, profile="long")
+np.set_printoptions(linewidth=320, formatter={"float_kind": "{:11.5g}".format})
 
 
 def plot_one_box(x, img, color=None, label=None, line_thickness=None):
@@ -39,11 +39,19 @@ def plot_one_box(x, img, color=None, label=None, line_thickness=None):
         t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
         c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
         cv2.rectangle(img, c1, c2, color, -1)  # filled
-        cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255],
-                    thickness=tf, lineType=cv2.LINE_AA)
+        cv2.putText(
+            img,
+            label,
+            (c1[0], c1[1] - 2),
+            0,
+            tl / 3,
+            [225, 255, 255],
+            thickness=tf,
+            lineType=cv2.LINE_AA,
+        )
 
 
-def plot_images(imgs, targets, fname='images.jpg'):
+def plot_images(imgs, targets, fname="images.jpg"):
     """Plots training images overlaid with targets
 
     Args:
@@ -67,11 +75,11 @@ def plot_images(imgs, targets, fname='images.jpg'):
         boxes[[1, 3]] *= h
         shape = imgs[i].shape
         if shape[0] == 1:
-            plt.subplot(ns, ns, i + 1).imshow(imgs[i].reshape(shape[1:]), cmap='gray')
+            plt.subplot(ns, ns, i + 1).imshow(imgs[i].reshape(shape[1:]), cmap="gray")
         else:
             plt.subplot(ns, ns, i + 1).imshow(imgs[i].transpose(1, 2, 0))
-        plt.plot(boxes[[0, 2, 2, 0, 0]], boxes[[1, 1, 3, 3, 1]], '.-')
-        plt.axis('off')
+        plt.plot(boxes[[0, 2, 2, 0, 0]], boxes[[1, 1, 3, 3, 1]], ".-")
+        plt.axis("off")
     fig.tight_layout()
     fig.savefig(fname, dpi=300)
     plt.close()

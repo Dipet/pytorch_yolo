@@ -8,12 +8,15 @@ class LetterBox(DualTransform):
     def get_params_dependent_on_targets(self, params):
         super(LetterBox, self).get_params_dependent_on_targets(params)
 
-    def __init__(self,
-                 new_shape=416,
-                 border_mode=cv.BORDER_REPLICATE,
-                 border_color=None,
-                 always_apply=True, p=1,
-                 interpolation=cv.INTER_AREA):
+    def __init__(
+        self,
+        new_shape=416,
+        border_mode=cv.BORDER_REPLICATE,
+        border_color=None,
+        always_apply=True,
+        p=1,
+        interpolation=cv.INTER_AREA,
+    ):
         super().__init__(always_apply=always_apply, p=p)
         self.new_shape = new_shape
         self.border_color = border_color
@@ -22,8 +25,8 @@ class LetterBox(DualTransform):
 
     def update_params(self, params, **kwargs):
         params = super().update_params(params, **kwargs)
-        h = params['rows']
-        w = params['cols']
+        h = params["rows"]
+        w = params["cols"]
 
         if isinstance(self.new_shape, int):  # rectangle
             r = h / w
@@ -33,8 +36,9 @@ class LetterBox(DualTransform):
             elif r > 1:
                 shape = [1, 1 / r]
 
-            target_shape = np.ceil(np.array(shape)
-                                   * self.new_shape / 32).astype(np.int) * 32
+            target_shape = (
+                np.ceil(np.array(shape) * self.new_shape / 32).astype(np.int) * 32
+            )
         else:
             target_shape = self.new_shape
 
@@ -57,38 +61,66 @@ class LetterBox(DualTransform):
         pad_right = target_width - resize_width - pad_left
         pad_bottom = target_height - resize_height - pad_top
 
-        params.update({'pad_left': pad_left,
-                       'pad_top': pad_top,
-                       'pad_right': pad_right,
-                       'pad_bottom': pad_bottom,
-                       'resize_ratio': ratio})
+        params.update(
+            {
+                "pad_left": pad_left,
+                "pad_top": pad_top,
+                "pad_right": pad_right,
+                "pad_bottom": pad_bottom,
+                "resize_ratio": ratio,
+            }
+        )
         return params
 
-    def apply(self, img, pad_left, pad_right,
-              pad_top, pad_bottom, resize_ratio, **params):
-        img = cv.resize(img, None, fx=resize_ratio, fy=resize_ratio,
-                        interpolation=self.interpolation)  # resized, no border
-        img = cv.copyMakeBorder(img,
-                                pad_top, pad_bottom,
-                                pad_left, pad_right,
-                                self.border_mode,
-                                value=self.border_color)  # padded square
+    def apply(
+        self, img, pad_left, pad_right, pad_top, pad_bottom, resize_ratio, **params
+    ):
+        img = cv.resize(
+            img,
+            None,
+            fx=resize_ratio,
+            fy=resize_ratio,
+            interpolation=self.interpolation,
+        )  # resized, no border
+        img = cv.copyMakeBorder(
+            img,
+            pad_top,
+            pad_bottom,
+            pad_left,
+            pad_right,
+            self.border_mode,
+            value=self.border_color,
+        )  # padded square
 
         return img
 
-    def apply_to_bbox(self, bbox, pad_left, pad_right,
-                      pad_top, pad_bottom, resize_ratio, cols, rows, **params):
+    def apply_to_bbox(
+        self,
+        bbox,
+        pad_left,
+        pad_right,
+        pad_top,
+        pad_bottom,
+        resize_ratio,
+        cols,
+        rows,
+        **params
+    ):
         x_min, y_min, x_max, y_max = denormalize_bbox(bbox, rows, cols)
-        bbox = [x_min * resize_ratio + pad_left,
-                y_min * resize_ratio + pad_top,
-                x_max * resize_ratio + pad_left,
-                y_max * resize_ratio + pad_top]
-        return normalize_bbox(bbox,
-                              rows * resize_ratio + pad_top + pad_bottom,
-                              cols * resize_ratio + pad_left + pad_right)
+        bbox = [
+            x_min * resize_ratio + pad_left,
+            y_min * resize_ratio + pad_top,
+            x_max * resize_ratio + pad_left,
+            y_max * resize_ratio + pad_top,
+        ]
+        return normalize_bbox(
+            bbox,
+            rows * resize_ratio + pad_top + pad_bottom,
+            cols * resize_ratio + pad_left + pad_right,
+        )
 
     def apply_to_keypoint(self, keypoint, **params):
         return keypoint
 
     def get_transform_init_args_names(self):
-        return 'new_shape', 'border_color', 'border_mode', 'interpolation'
+        return "new_shape", "border_color", "border_mode", "interpolation"

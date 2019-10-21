@@ -16,30 +16,104 @@ class YOLOv3Tiny(YOLOBase):
         # Darknet Encoder
         # ======================================================================
         self.sequence_1 = nn.Sequential()
-        self.sequence_1.add_module('conv1', ConvPoolBlock(self.in_channels, max(8, 16 // self.kernels_divider)))
-        self.sequence_1.add_module('conv2', ConvPoolBlock(self.sequence_1[-1].out_channels, max(8, 32 //self.kernels_divider)))
-        self.sequence_1.add_module('conv3', ConvPoolBlock(self.sequence_1[-1].out_channels, max(8, 64 //self.kernels_divider)))
-        self.sequence_1.add_module('conv4', ConvPoolBlock(self.sequence_1[-1].out_channels, max(8, 128 //self.kernels_divider)))
-        self.sequence_1.add_module('conv5', ConvBlock(self.sequence_1[-1].out_channels, max(8, 256 //self.kernels_divider)))
+        self.sequence_1.add_module(
+            "conv1", ConvPoolBlock(self.in_channels, max(8, 16 // self.kernels_divider))
+        )
+        self.sequence_1.add_module(
+            "conv2",
+            ConvPoolBlock(
+                self.sequence_1[-1].out_channels, max(8, 32 // self.kernels_divider)
+            ),
+        )
+        self.sequence_1.add_module(
+            "conv3",
+            ConvPoolBlock(
+                self.sequence_1[-1].out_channels, max(8, 64 // self.kernels_divider)
+            ),
+        )
+        self.sequence_1.add_module(
+            "conv4",
+            ConvPoolBlock(
+                self.sequence_1[-1].out_channels, max(8, 128 // self.kernels_divider)
+            ),
+        )
+        self.sequence_1.add_module(
+            "conv5",
+            ConvBlock(
+                self.sequence_1[-1].out_channels, max(8, 256 // self.kernels_divider)
+            ),
+        )
 
         self.sequence_2 = nn.Sequential()
-        self.sequence_2.add_module('max_pool5', nn.MaxPool2d(2, 2))
-        self.sequence_2.add_module('conv6', ConvPoolBlock(self.sequence_1[-1].out_channels, max(8, 512 //self.kernels_divider), pool_stride=1))
-        self.sequence_2.add_module('conv7', ConvBlock(self.sequence_2[-1].out_channels, max(8, 1024 //self.kernels_divider)))
-        self.sequence_2.add_module('conv8', ConvBlock(self.sequence_2[-1].out_channels, max(8, 256 //self.kernels_divider), size=1))
+        self.sequence_2.add_module("max_pool5", nn.MaxPool2d(2, 2))
+        self.sequence_2.add_module(
+            "conv6",
+            ConvPoolBlock(
+                self.sequence_1[-1].out_channels,
+                max(8, 512 // self.kernels_divider),
+                pool_stride=1,
+            ),
+        )
+        self.sequence_2.add_module(
+            "conv7",
+            ConvBlock(
+                self.sequence_2[-1].out_channels, max(8, 1024 // self.kernels_divider)
+            ),
+        )
+        self.sequence_2.add_module(
+            "conv8",
+            ConvBlock(
+                self.sequence_2[-1].out_channels,
+                max(8, 256 // self.kernels_divider),
+                size=1,
+            ),
+        )
 
         self.sequence_branch1_1 = nn.Sequential()
-        self.sequence_branch1_1.add_module('branch1_conv1', ConvBlock(self.sequence_2[-1].out_channels, max(8, 128 //self.kernels_divider), size=1))
-        self.sequence_branch1_1.add_module('branch1_upsample', Upsample(2))
+        self.sequence_branch1_1.add_module(
+            "branch1_conv1",
+            ConvBlock(
+                self.sequence_2[-1].out_channels,
+                max(8, 128 // self.kernels_divider),
+                size=1,
+            ),
+        )
+        self.sequence_branch1_1.add_module("branch1_upsample", Upsample(2))
 
         self.sequence_branch1_2 = nn.Sequential()
-        self.sequence_branch1_2.add_module('branch1_concat', Concat(1))
-        self.sequence_branch1_2.add_module('branch1_conv2', ConvBlock(self.sequence_1[-1].out_channels + self.sequence_branch1_1[0].out_channels, max(8, 256 //self.kernels_divider)))
-        self.sequence_branch1_2.add_module('branch1_conv3', nn.Conv2d(self.sequence_branch1_2[-1].out_channels, self.yolo_layer_input_size, kernel_size=1))
+        self.sequence_branch1_2.add_module("branch1_concat", Concat(1))
+        self.sequence_branch1_2.add_module(
+            "branch1_conv2",
+            ConvBlock(
+                self.sequence_1[-1].out_channels
+                + self.sequence_branch1_1[0].out_channels,
+                max(8, 256 // self.kernels_divider),
+            ),
+        )
+        self.sequence_branch1_2.add_module(
+            "branch1_conv3",
+            nn.Conv2d(
+                self.sequence_branch1_2[-1].out_channels,
+                self.yolo_layer_input_size,
+                kernel_size=1,
+            ),
+        )
 
         self.sequence_branch2 = nn.Sequential()
-        self.sequence_branch2.add_module('branch2_conv1', ConvBlock(self.sequence_2[-1].out_channels, max(8, 512 //self.kernels_divider)))
-        self.sequence_branch2.add_module('branch2_conv2', nn.Conv2d(self.sequence_branch2[-1].out_channels, self.yolo_layer_input_size, kernel_size=1))
+        self.sequence_branch2.add_module(
+            "branch2_conv1",
+            ConvBlock(
+                self.sequence_2[-1].out_channels, max(8, 512 // self.kernels_divider)
+            ),
+        )
+        self.sequence_branch2.add_module(
+            "branch2_conv2",
+            nn.Conv2d(
+                self.sequence_branch2[-1].out_channels,
+                self.yolo_layer_input_size,
+                kernel_size=1,
+            ),
+        )
         # ======================================================================
 
         # YOLO Layers
@@ -105,16 +179,27 @@ class YOLOv3Tiny(YOLOBase):
                 layer.fuse()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from torchsummary import summary
     from pytorch_yolo.models import YOLOv3SPP
 
-    device = 'cpu'
-    model = YOLOv3SPP(n_class=1, in_channels=1, onnx=False, in_shape=(1, 1, 416, 416), kernels_divider=1,
-                      anchors=[[(10, 13), (16, 30), (33, 23)],
-                               [(30, 61), (62, 45), (59, 119)],
-                               [(116, 90), (156, 198), (373, 326)]]
-                      ).to(device).eval()
+    device = "cpu"
+    model = (
+        YOLOv3SPP(
+            n_class=1,
+            in_channels=1,
+            onnx=False,
+            in_shape=(1, 1, 416, 416),
+            kernels_divider=1,
+            anchors=[
+                [(10, 13), (16, 30), (33, 23)],
+                [(30, 61), (62, 45), (59, 119)],
+                [(116, 90), (156, 198), (373, 326)],
+            ],
+        )
+        .to(device)
+        .eval()
+    )
     dummy = torch.rand((1, 1, 416, 416)).to(device)
     pred = model(dummy)
     summary(model, (1, 416, 416), device=device)

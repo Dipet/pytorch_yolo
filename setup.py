@@ -6,18 +6,16 @@ from pkg_resources import DistributionNotFound, get_distribution
 
 
 INSTALL_REQUIRES = [
-    'torch>=1.2.0',
-    'efficientnet-pytorch>=0.2.0',
-    'matplotlib>=2.2.3',
-    'numpy>=1.16.3',
-    'pycocotools>=2.1',
-    'tensorboardX>=1.9',
-    'torchvision>=0.3.0',
-    'tqdm'
+    "torch>=1.2.0",
+    "efficientnet-pytorch>=0.2.0",
+    "matplotlib>=2.2.3",
+    "numpy>=1.16.3",
+    "pycocotools>=2.1",
+    "tensorboardX>=1.9",
+    "torchvision>=0.3.0",
+    "tqdm",
 ]
-CHOOSE_INSTALL_REQUIRES = [
-    ['opencv-python', 'opencv-python-headless',]
-]
+CHOOSE_INSTALL_REQUIRES = [["opencv-python", "opencv-python-headless"]]
 
 
 def get_version():
@@ -62,5 +60,7 @@ setup(
     long_description_content_type="text/markdown",
     author="Mikhail Druzhinin",
     license="MIT",
-    install_requires=get_install_requirements(INSTALL_REQUIRES, CHOOSE_INSTALL_REQUIRES),
+    install_requires=get_install_requirements(
+        INSTALL_REQUIRES, CHOOSE_INSTALL_REQUIRES
+    ),
 )

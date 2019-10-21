@@ -7,35 +7,40 @@ import pandas as pd
 
 
 def show_image(row):
-    image = cv.imread(row['image_path'], cv.IMREAD_GRAYSCALE)
+    image = cv.imread(row["image_path"], cv.IMREAD_GRAYSCALE)
     plt.figure(figsize=(15, 15))
-    plt.imshow(image, cmap='gray')
-    plt.axis('off')
-    
+    plt.imshow(image, cmap="gray")
+    plt.axis("off")
+
 
 def show_with_bbox(row):
-    left = int(row['left'])
-    top = int(row['top'])
-    right = int(row['right'])
-    bottom = int(row['bottom']) 
-    
-    image = cv.imread(row['image_path'], cv.IMREAD_COLOR)
+    left = int(row["left"])
+    top = int(row["top"])
+    right = int(row["right"])
+    bottom = int(row["bottom"])
+
+    image = cv.imread(row["image_path"], cv.IMREAD_COLOR)
     image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
     image = cv.rectangle(image, (left, top), (right, bottom), (255, 0, 0), 3)
-    
+
     plt.figure(figsize=(15, 15))
-    plt.imshow(image, cmap='gray')
-    plt.axis('off')
-    
-    
+    plt.imshow(image, cmap="gray")
+    plt.axis("off")
+
+
 def images_to_gray(paths):
     for path in tqdm(paths):
         image = cv.imread(path, cv.IMREAD_GRAYSCALE)
         cv.imwrite(path, image)
-        
-        
+
+
 def save_keras_ssd(df: pd.DataFrame, path):
-    df.to_csv(path, index=False, columns=['image_path', 'left', 'right', 'top', 'bottom', 'type'], header=False)
+    df.to_csv(
+        path,
+        index=False,
+        columns=["image_path", "left", "right", "top", "bottom", "type"],
+        header=False,
+    )
 
 
 def compute_iou(bbox1, bbox2):

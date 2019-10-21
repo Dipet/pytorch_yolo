@@ -22,13 +22,13 @@ class SqueezeEncoder(nn.Module):
         self.route_index = -4
 
         if in_channels == 3:
-            self.sequence1 = nn.Sequential(*features[:self.route_index])
+            self.sequence1 = nn.Sequential(*features[: self.route_index])
         else:
             conv = nn.Conv2d(in_channels, 64, kernel_size=3, stride=2)
-            seq1 = [conv] + features[1:self.route_index]
+            seq1 = [conv] + features[1 : self.route_index]
             self.sequence1 = nn.Sequential(*seq1)
 
-        self.sequence2 = nn.Sequential(*features[self.route_index:])
+        self.sequence2 = nn.Sequential(*features[self.route_index :])
 
     def forward(self, x):
         b1 = self.sequence1(x)
@@ -52,18 +52,42 @@ class YOLOv3TinySqueeze(YOLOBase):
         self.features = SqueezeEncoder(in_channels=self.in_channels)
         f_out1, f_out2 = self.features.out_channels
 
-
         self.sequence_branch1_1 = nn.Sequential()
-        self.sequence_branch1_1.add_module('branch1_conv1', ConvBlock(f_out2, max(8, 128 // self.kernels_divider), size=1))
+        self.sequence_branch1_1.add_module(
+            "branch1_conv1",
+            ConvBlock(f_out2, max(8, 128 // self.kernels_divider), size=1),
+        )
 
         self.sequence_branch1_2 = nn.Sequential()
-        self.sequence_branch1_2.add_module('branch1_concat', Concat(1))
-        self.sequence_branch1_2.add_module('branch1_conv2', ConvBlock(f_out1 + self.sequence_branch1_1[0].out_channels, max(8, 128 // self.kernels_divider)))
-        self.sequence_branch1_2.add_module('branch1_conv3', nn.Conv2d(self.sequence_branch1_2[-1].out_channels, self.yolo_layer_input_size, kernel_size=1))
+        self.sequence_branch1_2.add_module("branch1_concat", Concat(1))
+        self.sequence_branch1_2.add_module(
+            "branch1_conv2",
+            ConvBlock(
+                f_out1 + self.sequence_branch1_1[0].out_channels,
+                max(8, 128 // self.kernels_divider),
+            ),
+        )
+        self.sequence_branch1_2.add_module(
+            "branch1_conv3",
+            nn.Conv2d(
+                self.sequence_branch1_2[-1].out_channels,
+                self.yolo_layer_input_size,
+                kernel_size=1,
+            ),
+        )
 
         self.sequence_branch2 = nn.Sequential()
-        self.sequence_branch2.add_module('branch2_conv1', ConvBlock(f_out2, max(8, 128 // self.kernels_divider)))
-        self.sequence_branch2.add_module('branch2_conv2', nn.Conv2d(self.sequence_branch2[-1].out_channels, self.yolo_layer_input_size, kernel_size=1))
+        self.sequence_branch2.add_module(
+            "branch2_conv1", ConvBlock(f_out2, max(8, 128 // self.kernels_divider))
+        )
+        self.sequence_branch2.add_module(
+            "branch2_conv2",
+            nn.Conv2d(
+                self.sequence_branch2[-1].out_channels,
+                self.yolo_layer_input_size,
+                kernel_size=1,
+            ),
+        )
         # ======================================================================
 
         self.yolo1, self.yolo2 = self._create_yolo_layers()
@@ -106,10 +130,10 @@ class YOLOv3TinySqueeze(YOLOBase):
         return torch.cat(io, 1), p
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from torchsummary import summary
 
-    device = 'cpu'
+    device = "cpu"
     model = YOLOv3TinySqueeze(n_class=1).to(device)
     summary(model, (3, 608, 608), device=device)
 

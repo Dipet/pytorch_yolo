@@ -16,35 +16,29 @@ from pycocotools.coco import COCO
 
 
 class CSVDataset(Dataset):  # for training/testing
-    def __init__(self,
-                 path,
-                 transform=None):
+    def __init__(self, path, transform=None):
         df = pd.read_csv(path)
-        if df['type'].dtype == np.object:
-            map_type = {j: i for i, j in enumerate(sorted(df['type'].unique()))}
-            df['type'] = df['type'].replace(map_type)
+        if df["type"].dtype == np.object:
+            map_type = {j: i for i, j in enumerate(sorted(df["type"].unique()))}
+            df["type"] = df["type"].replace(map_type)
 
-        if min(df['type']) > 0:  # Fix class
-            df['type'] -= 1
-        self.cls_number = len(df['type'].unique())
+        if min(df["type"]) > 0:  # Fix class
+            df["type"] -= 1
+        self.cls_number = len(df["type"].unique())
         self._dataset = {}
-        self.class_weight = self.compute_labels_weights(df['type'])
+        self.class_weight = self.compute_labels_weights(df["type"])
 
         dirpath, name = os.path.split(path)
-        labels_path = os.path.join(dirpath, 'labels_' + name)
+        labels_path = os.path.join(dirpath, "labels_" + name)
         if os.path.exists(labels_path):
-            self._labels = pd.read_csv(labels_path)['label'].values
+            self._labels = pd.read_csv(labels_path)["label"].values
         else:
-            self._labels = np.array([str(i) for i in sorted(df['type'].unique())])
+            self._labels = np.array([str(i) for i in sorted(df["type"].unique())])
 
-        for _, row in tqdm(df.iterrows(), total=len(df), desc='Parse csv file'):
-            path = row['image_path']
+        for _, row in tqdm(df.iterrows(), total=len(df), desc="Parse csv file"):
+            path = row["image_path"]
 
-            label = [row['left'],
-                     row['top'],
-                     row['right'],
-                     row['bottom'],
-                     row['type']]
+            label = [row["left"], row["top"], row["right"], row["bottom"], row["type"]]
 
             if path in self._dataset:
                 self._dataset[path].append(label)
@@ -55,7 +49,7 @@ class CSVDataset(Dataset):  # for training/testing
             self._dataset[i] = np.array(self._dataset[i]).astype(float)
 
         n = len(self._dataset)
-        assert n > 0, 'No images found in %s' % path
+        assert n > 0, "No images found in %s" % path
 
         self._img_files = list(self._dataset.keys())
 
@@ -65,7 +59,7 @@ class CSVDataset(Dataset):  # for training/testing
         img_path = self._img_files[index]
 
         img = cv.imread(img_path, cv.IMREAD_COLOR)  # BGR
-        assert img is not None, 'File Not Found ' + img_path
+        assert img is not None, "File Not Found " + img_path
         labels = self._dataset[img_path].copy()
 
         labels[:, 1] = np.maximum(labels[:, 1], 0)
@@ -105,21 +99,22 @@ class CSVDataset(Dataset):  # for training/testing
 
     def use_transform(self, img, labels=None):
         if labels is not None:
-            data = {'image': img,
-                    'bboxes': labels}
+            data = {"image": img, "bboxes": labels}
         else:
-            data = {'image': img}
+            data = {"image": img}
 
         if self.transform:
             data = self.transform(**data)
 
         if labels is not None:
-            labels = (np.array(data['bboxes'])
-                      if len(data['bboxes'])
-                      else np.zeros((0,) + labels.shape[1:]))
-            return data['image'], labels
+            labels = (
+                np.array(data["bboxes"])
+                if len(data["bboxes"])
+                else np.zeros((0,) + labels.shape[1:])
+            )
+            return data["image"], labels
 
-        return data['image']
+        return data["image"]
 
     @staticmethod
     def compute_labels_weights(labels):
@@ -139,8 +134,10 @@ class CSVDataset(Dataset):  # for training/testing
     def __getitem__(self, index):
         img, labels = self._get_data(index)
         img, labels = self.use_transform(img, labels)
-        return (self._convert_img_for_net(img),
-                self._convert_labels_for_net(labels, img))
+        return (
+            self._convert_img_for_net(img),
+            self._convert_labels_for_net(labels, img),
+        )
 
     @staticmethod
     def equalize_shapes(images, labels=None):
@@ -165,7 +162,7 @@ class CSVDataset(Dataset):  # for training/testing
             left = int(round(dw - 0.1))
 
             new_img = torch.full([c, new_h, new_w], 0.5, dtype=torch.float32)
-            new_img[:, top:top + h, left:left + w] = img
+            new_img[:, top : top + h, left : left + w] = img
             images[i] = new_img
 
             if labels is not None and len(labels[i]):
@@ -191,28 +188,24 @@ class CSVDataset(Dataset):  # for training/testing
 
 
 class CSVDatasetValidate(CSVDataset):
-    def __init__(self,
-                 path,
-                 transform=None):
+    def __init__(self, path, transform=None):
         super().__init__(path, transform)
         df = pd.read_csv(path)
 
         dirpath, coco_path = os.path.split(path)
-        coco_path = os.path.join(dirpath, 'coco_' + coco_path)
+        coco_path = os.path.join(dirpath, "coco_" + coco_path)
         coco_path, _ = os.path.splitext(coco_path)
-        coco_path += '.json'
+        coco_path += ".json"
         if not os.path.exists(coco_path):
             coco = coco_helper.dataset_from_df(df, [(i, i) for i in self._labels])
 
-            with open(coco_path, 'w') as file:
+            with open(coco_path, "w") as file:
                 json.dump(coco, file)
         self.coco = COCO(coco_path)
 
 
 class CSVDatasetInference(CSVDataset):
-    def __init__(self,
-                 path,
-                 transform=None):
+    def __init__(self, path, transform=None):
         super().__init__(path, transform)
 
     def __getitem__(self, index):

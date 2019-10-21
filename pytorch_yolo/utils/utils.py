@@ -86,12 +86,16 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
         b2_y1, b2_y2 = box2[1] - box2[3] / 2, box2[1] + box2[3] / 2
 
     # Intersection area
-    inter_area = ((torch.min(b1_x2, b2_x2) - torch.max(b1_x1, b2_x1)).clamp(0) *
-                  (torch.min(b1_y2, b2_y2) - torch.max(b1_y1, b2_y1)).clamp(0))
+    inter_area = (torch.min(b1_x2, b2_x2) - torch.max(b1_x1, b2_x1)).clamp(0) * (
+        torch.min(b1_y2, b2_y2) - torch.max(b1_y1, b2_y1)
+    ).clamp(0)
 
     # Union Area
-    union_area = ((b1_x2 - b1_x1) * (b1_y2 - b1_y1) + 1e-16) + \
-                 (b2_x2 - b2_x1) * (b2_y2 - b2_y1) - inter_area
+    union_area = (
+        ((b1_x2 - b1_x1) * (b1_y2 - b1_y1) + 1e-16)
+        + (b2_x2 - b2_x1) * (b2_y2 - b2_y1)
+        - inter_area
+    )
 
     return inter_area / union_area  # iou
 
@@ -143,15 +147,15 @@ def compute_loss(p, targets, model, class_weight=None):
             pi = pi0[b, a, gj, gi]  # predictions closest to anchors
             tconf[b, a, gj, gi] = 1  # conf
 
-            lxy += (k * h['xy_loss']) * mse_loss(torch.sigmoid(pi[..., 0:2]), txy[i])
-            lwh += (k * h['wh_loss']) * mse_loss(pi[..., 2:4], twh[i])
+            lxy += (k * h["xy_loss"]) * mse_loss(torch.sigmoid(pi[..., 0:2]), txy[i])
+            lwh += (k * h["wh_loss"]) * mse_loss(pi[..., 2:4], twh[i])
 
             if model.n_class > 1:
-                lcls += (k * h['cls_loss']) * ce_loss(pi[..., 5:], tcls[i])
+                lcls += (k * h["cls_loss"]) * ce_loss(pi[..., 5:], tcls[i])
             else:
-                lcls += (k * h['cls_loss']) * bce_loss(pi[..., 5], tcls[i].float())
+                lcls += (k * h["cls_loss"]) * bce_loss(pi[..., 5], tcls[i].float())
 
-        lconf += (k * h['conf_loss']) * bce_loss(pi0[..., 4], tconf)
+        lconf += (k * h["conf_loss"]) * bce_loss(pi0[..., 4], tconf)
     loss = lxy + lwh + lconf + lcls
 
     return loss, torch.cat((lxy, lwh, lconf, lcls, loss)).detach()
@@ -159,7 +163,7 @@ def compute_loss(p, targets, model, class_weight=None):
 
 def build_targets(model, targets):
     # targets = [image, class, x, y, w, h]
-    iou_thres = model.hyper_params['iou_thresh']
+    iou_thres = model.hyper_params["iou_thresh"]
 
     nt = len(targets)
     txy, twh, tcls, indices = [], [], [], []
@@ -192,7 +196,7 @@ def build_targets(model, targets):
         # Class
         tcls.append(c)
         if c.shape[0]:
-            assert c.max() <= layer.n_classes, 'Target classes exceed model classes'
+            assert c.max() <= layer.n_classes, "Target classes exceed model classes"
 
     return txy, twh, tcls, indices
 
@@ -237,7 +241,7 @@ def non_max_suppression(prediction, conf_thres=0.5, nms_thres=0.5):
         pred = pred[(-pred[:, 4]).argsort()]
 
         det_max = []
-        nms_style = 'MERGE'  # 'OR' (default), 'AND', 'MERGE' (experimental)
+        nms_style = "MERGE"  # 'OR' (default), 'AND', 'MERGE' (experimental)
         for c in pred[:, -1].unique():
             dc = pred[pred[:, -1] == c]  # select class c
             n = len(dc)
@@ -250,20 +254,20 @@ def non_max_suppression(prediction, conf_thres=0.5, nms_thres=0.5):
                 dc = dc[:100]
 
             # Non-maximum suppression
-            if nms_style == 'OR':  # default
+            if nms_style == "OR":  # default
                 while dc.shape[0]:
                     det_max.append(dc[:1])  # save highest conf detection
                     if len(dc) == 1:  # Stop if we're at the last detection
                         break
                     iou = bbox_iou(dc[0], dc[1:])  # iou with other boxes
                     dc = dc[1:][iou < nms_thres]  # remove ious > threshold
-            elif nms_style == 'AND':  # requires overlap, single boxes erased
+            elif nms_style == "AND":  # requires overlap, single boxes erased
                 while len(dc) > 1:
                     iou = bbox_iou(dc[0], dc[1:])  # iou with other boxes
                     if iou.max() > 0.5:
                         det_max.append(dc[:1])
                     dc = dc[1:][iou < nms_thres]  # remove ious > threshold
-            elif nms_style == 'MERGE':  # weighted mixture box
+            elif nms_style == "MERGE":  # weighted mixture box
                 while len(dc):
                     if len(dc) == 1:
                         det_max.append(dc)
@@ -274,7 +278,7 @@ def non_max_suppression(prediction, conf_thres=0.5, nms_thres=0.5):
                     det_max.append(dc[:1])
                     dc = dc[i == 0]
             # soft-NMS https://arxiv.org/abs/1704.04503
-            elif nms_style == 'SOFT':
+            elif nms_style == "SOFT":
                 sigma = 0.5  # soft-nms sigma parameter
                 while len(dc):
                     if len(dc) == 1:
@@ -312,12 +316,14 @@ def _dict_from_results(data, targets, imgs_path, orig_shapes, cur_shape):
         orig_shape = orig_shapes[i]
         pred[:, :4] = scale_coords(cur_shape, pred[:, :4], orig_shape).round()
         for x1, y1, x2, y2, conf, cls_conf, cls in pred.detach().cpu().numpy():
-            sub_data = {'type': int(cls),
-                        'score': float(conf),
-                        'left': int(x1),
-                        'top': int(y1),
-                        'right': int(x2),
-                        'bottom': int(y2)}
+            sub_data = {
+                "type": int(cls),
+                "score": float(conf),
+                "left": int(x1),
+                "top": int(y1),
+                "right": int(x2),
+                "bottom": int(y2),
+            }
 
             if img_path in data:
                 data[img_path].append(sub_data)
@@ -329,7 +335,7 @@ def _dict_from_results(data, targets, imgs_path, orig_shapes, cur_shape):
 
 def bench_results(results_path, cocoGt):
     cocoDt = cocoGt.loadRes(results_path)
-    cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
+    cocoEval = COCOeval(cocoGt, cocoDt, "bbox")
 
     cocoEval.evaluate()
     cocoEval.accumulate()
@@ -346,40 +352,62 @@ def bench_results(results_path, cocoGt):
 
         iou += i.mean()
     mean_iou = iou / len(cocoEval.ious)
-    print(f'Mean IOU: {mean_iou:.2f}')
+    print(f"Mean IOU: {mean_iou:.2f}")
 
-    metrics = ['AP', 'AP50', 'AP75', 'APS', 'APM', 'APL', 'AR1', 'AR10',
-               'AR100', 'ARS', 'ARM', 'ARL', 'IOU']
+    metrics = [
+        "AP",
+        "AP50",
+        "AP75",
+        "APS",
+        "APM",
+        "APL",
+        "AR1",
+        "AR10",
+        "AR100",
+        "ARS",
+        "ARM",
+        "ARL",
+        "IOU",
+    ]
 
     return dict(zip(metrics, list(cocoEval.stats) + [mean_iou]))
 
 
-def test_model(model: torch.nn.Module, dataset,
-               batch_size, num_workers, device,
-               conf_thresh=0.1, nms_thresh=0.1):
-    dataloader = DataLoader(dataset,
-                            batch_size=batch_size,
-                            num_workers=num_workers,
-                            shuffle=False,
-                            pin_memory=True,
-                            collate_fn=dataset.collate_fn)
+def test_model(
+    model: torch.nn.Module,
+    dataset,
+    batch_size,
+    num_workers,
+    device,
+    conf_thresh=0.1,
+    nms_thresh=0.1,
+):
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        shuffle=False,
+        pin_memory=True,
+        collate_fn=dataset.collate_fn,
+    )
     state = model.training
     model.eval()
 
     df_predicted = {}
 
-    for imgs, targets, imgs_path, shapes in tqdm(dataloader,
-                                                 total=len(dataloader),
-                                                 desc='Validation'):
+    for imgs, targets, imgs_path, shapes in tqdm(
+        dataloader, total=len(dataloader), desc="Validation"
+    ):
         imgs = imgs.to(device)
         with torch.no_grad():
             p, _ = model(imgs)
 
         det = non_max_suppression(p, conf_thresh, nms_thresh)
-        df_predicted = _dict_from_results(df_predicted, det,
-                                          imgs_path, shapes, imgs.shape[-2:])
+        df_predicted = _dict_from_results(
+            df_predicted, det, imgs_path, shapes, imgs.shape[-2:]
+        )
 
-    results = tempfile.NamedTemporaryFile('w+')
+    results = tempfile.NamedTemporaryFile("w+")
 
     json_results = coco_helper.results_from_dict(df_predicted, dataset.coco.dataset)
     json.dump(json_results, results)

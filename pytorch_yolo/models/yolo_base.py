@@ -17,26 +17,30 @@ from abc import abstractclassmethod
 
 
 class ConvBlock(nn.Module):
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 size=3,
-                 stride=1,
-                 pad=True):
+    def __init__(self, in_channels, out_channels, size=3, stride=1, pad=True):
         super().__init__()
 
         conv_pad = (size - 1) // 2 if pad else 0
 
-        self.sequence = nn.Sequential(OrderedDict((
-            ('conv', nn.Conv2d(in_channels=in_channels,
-                               out_channels=out_channels,
-                               kernel_size=size,
-                               stride=stride,
-                               padding=conv_pad,
-                               bias=False)),
-            ('batch_norm', nn.BatchNorm2d(out_channels)),
-            ('activation', nn.LeakyReLU(0.1, inplace=True)),
-        )))
+        self.sequence = nn.Sequential(
+            OrderedDict(
+                (
+                    (
+                        "conv",
+                        nn.Conv2d(
+                            in_channels=in_channels,
+                            out_channels=out_channels,
+                            kernel_size=size,
+                            stride=stride,
+                            padding=conv_pad,
+                            bias=False,
+                        ),
+                    ),
+                    ("batch_norm", nn.BatchNorm2d(out_channels)),
+                    ("activation", nn.LeakyReLU(0.1, inplace=True)),
+                )
+            )
+        )
 
         self.out_channels = out_channels
 
@@ -67,29 +71,34 @@ class MaxPool(nn.MaxPool2d):
 
 
 class ConvPoolBlock(ConvBlock):
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 conv_size=3,
-                 conv_stride=1,
-                 conv_pad=True,
-                 pool_size=2,
-                 pool_stride=2):
-        super().__init__(in_channels, out_channels,
-                         conv_size, conv_stride, conv_pad)
-        self.sequence.add_module('max_pool', MaxPool(pool_size, pool_stride))
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        conv_size=3,
+        conv_stride=1,
+        conv_pad=True,
+        pool_size=2,
+        pool_stride=2,
+    ):
+        super().__init__(in_channels, out_channels, conv_size, conv_stride, conv_pad)
+        self.sequence.add_module("max_pool", MaxPool(pool_size, pool_stride))
 
 
 class YOLOBase(nn.Module):
-    def __init__(self,
-                 in_channels=3,
-                 n_class=80,
-                 kernels_divider=1,
-                 anchors=(((10.0, 14.0), (23.0, 27.0), (37.0, 58.0)),
-                          ((81.0, 82.0), (135.0, 169.0), (344.0, 319.0))),
-                 onnx=False,
-                 in_shape=None,
-                 hyper_params=None):
+    def __init__(
+        self,
+        in_channels=3,
+        n_class=80,
+        kernels_divider=1,
+        anchors=(
+            ((10.0, 14.0), (23.0, 27.0), (37.0, 58.0)),
+            ((81.0, 82.0), (135.0, 169.0), (344.0, 319.0)),
+        ),
+        onnx=False,
+        in_shape=None,
+        hyper_params=None,
+    ):
         super().__init__()
 
         self.header_info = np.zeros(5, dtype=np.int32)
@@ -114,7 +123,7 @@ class YOLOBase(nn.Module):
             if isinstance(layer, ConvBlock):
                 layer.fuse()
 
-    def _create_yolo_layers(self, device='cpu'):
+    def _create_yolo_layers(self, device="cpu"):
         layers = []
 
         dummies = [None] * len(self.anchors)
@@ -124,14 +133,18 @@ class YOLOBase(nn.Module):
 
         for anchor, dummy in zip(self.anchors, dummies):
             if self.onnx:
-                layers.append(YOLOLayer(anchor, self.n_class,
-                                        self.anchors,
-                                        self.onnx,
-                                        dummy,
-                                        max(self.in_shape[-2:])))
+                layers.append(
+                    YOLOLayer(
+                        anchor,
+                        self.n_class,
+                        self.anchors,
+                        self.onnx,
+                        dummy,
+                        max(self.in_shape[-2:]),
+                    )
+                )
             else:
-                layers.append(YOLOLayer(anchor, self.n_class,
-                                        self.anchors, self.onnx))
+                layers.append(YOLOLayer(anchor, self.n_class, self.anchors, self.onnx))
 
         return layers
 
@@ -162,16 +175,22 @@ class YOLOBase(nn.Module):
         # Try to download weights if not available locally
         if not os.path.isfile(weights_path):
             try:
-                os.system('wget https://pjreddie.com/media/files/'
-                          + weights_file + ' -O ' + weights_path)
+                os.system(
+                    "wget https://pjreddie.com/media/files/"
+                    + weights_file
+                    + " -O "
+                    + weights_path
+                )
             except IOError:
-                print(f'{weights_path} not found.')
-                print('Try https://drive.google.com/drive/folders/1uxgUBemJVw9wZsdpboYbzUN4bcRhsuAI')
+                print(f"{weights_path} not found.")
+                print(
+                    "Try https://drive.google.com/drive/folders/1uxgUBemJVw9wZsdpboYbzUN4bcRhsuAI"
+                )
 
         # Open the weights file
-        with open(weights_path, 'rb') as f:
+        with open(weights_path, "rb") as f:
             # First five are header values
-            header = np.fromfile(f, dtype=np.int32,  count=5)
+            header = np.fromfile(f, dtype=np.int32, count=5)
 
             # Needed to write header when saving weights
             self.header_info = header
@@ -184,13 +203,13 @@ class YOLOBase(nn.Module):
         for layer in layers:
             if not isinstance(layer, (nn.Conv2d, ConvBlock, ConvPoolBlock)):
                 if warnings:
-                    print('Skip unsupported layer:', str(layer))
+                    print("Skip unsupported layer:", str(layer))
                 continue
 
             if isinstance(layer, nn.Conv2d):
                 # Load conv. bias
                 num_b = layer.bias.numel()
-                conv_b = torch.from_numpy(weights_path[ptr:ptr + num_b])
+                conv_b = torch.from_numpy(weights_path[ptr : ptr + num_b])
                 conv_b = conv_b.view_as(layer.bias)
                 layer.bias.data.copy_(conv_b)
                 ptr += num_b
@@ -199,22 +218,22 @@ class YOLOBase(nn.Module):
                 bn_layer = layer[1]
                 num_b = bn_layer.bias.numel()  # Number of biases
                 # Bias
-                bn_b = torch.from_numpy(weights_path[ptr:ptr + num_b])
+                bn_b = torch.from_numpy(weights_path[ptr : ptr + num_b])
                 bn_b = bn_b.view_as(bn_layer.bias)
                 bn_layer.bias.data.copy_(bn_b)
                 ptr += num_b
                 # Weight
-                bn_w = torch.from_numpy(weights_path[ptr:ptr + num_b])
+                bn_w = torch.from_numpy(weights_path[ptr : ptr + num_b])
                 bn_w = bn_w.view_as(bn_layer.weight)
                 bn_layer.weight.data.copy_(bn_w)
                 ptr += num_b
                 # Running Mean
-                bn_rm = torch.from_numpy(weights_path[ptr:ptr + num_b])
+                bn_rm = torch.from_numpy(weights_path[ptr : ptr + num_b])
                 bn_rm = bn_rm.view_as(bn_layer.running_mean)
                 bn_layer.running_mean.data.copy_(bn_rm)
                 ptr += num_b
                 # Running Var
-                bn_rv = torch.from_numpy(weights_path[ptr:ptr + num_b])
+                bn_rv = torch.from_numpy(weights_path[ptr : ptr + num_b])
                 bn_rv = bn_rv.view_as(bn_layer.running_var)
                 bn_layer.running_var.data.copy_(bn_rv)
                 ptr += num_b
@@ -222,7 +241,7 @@ class YOLOBase(nn.Module):
             # Load conv. weights
             conv_layer = layer[0]
             num_w = conv_layer.weight.numel()
-            conv_w = torch.from_numpy(weights_path[ptr:ptr + num_w])
+            conv_w = torch.from_numpy(weights_path[ptr : ptr + num_w])
             conv_w = conv_w.view_as(conv_layer.weight)
             conv_layer.weight.data.copy_(conv_w)
             ptr += num_w
@@ -238,7 +257,7 @@ class YOLOBase(nn.Module):
             cutoff: layers cutoff.
 
         """
-        with open(path, 'wb') as f:
+        with open(path, "wb") as f:
             self.header_info[3] = self.seen
             self.header_info.tofile(f)
 
@@ -246,7 +265,7 @@ class YOLOBase(nn.Module):
             for layer in layers:
                 if not isinstance(layer, (nn.Conv2d, ConvBlock, ConvPoolBlock)):
                     if warnings:
-                        print('Skip unsupported layer:', str(layer))
+                        print("Skip unsupported layer:", str(layer))
                     continue
 
                 # If batch norm, load bn first

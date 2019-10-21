@@ -25,13 +25,9 @@ class ShuffleEncoder(nn.Module):
                 nn.BatchNorm2d(output_channels),
                 nn.ReLU(inplace=True),
             )
-        self.sequence1 = nn.Sequential(conv1,
-                                       model.maxpool,
-                                       model.stage2,
-                                       model.stage3)
+        self.sequence1 = nn.Sequential(conv1, model.maxpool, model.stage2, model.stage3)
 
-        self.sequence2 = nn.Sequential(model.stage4,
-                                       model.conv5)
+        self.sequence2 = nn.Sequential(model.stage4, model.conv5)
 
     def forward(self, x):
         b1 = self.sequence1(x)
@@ -55,19 +51,43 @@ class YOLOv3TinyShuffle(YOLOBase):
         self.features = ShuffleEncoder(in_channels=self.in_channels)
         f_out1, f_out2 = self.features.out_channels
 
-
         self.sequence_branch1_1 = nn.Sequential()
-        self.sequence_branch1_1.add_module('branch1_conv1', ConvBlock(f_out2, max(8, 128 //  self.kernels_divider), size=1))
-        self.sequence_branch1_1.add_module('branch1_upsample', Upsample(2))
+        self.sequence_branch1_1.add_module(
+            "branch1_conv1",
+            ConvBlock(f_out2, max(8, 128 // self.kernels_divider), size=1),
+        )
+        self.sequence_branch1_1.add_module("branch1_upsample", Upsample(2))
 
         self.sequence_branch1_2 = nn.Sequential()
-        self.sequence_branch1_2.add_module('branch1_concat', Concat(1))
-        self.sequence_branch1_2.add_module('branch1_conv2', ConvBlock(f_out1 + self.sequence_branch1_1[0].out_channels, max(8, 128 //  self.kernels_divider)))
-        self.sequence_branch1_2.add_module('branch1_conv3', nn.Conv2d(self.sequence_branch1_2[-1].out_channels, self.yolo_layer_input_size, kernel_size=1))
+        self.sequence_branch1_2.add_module("branch1_concat", Concat(1))
+        self.sequence_branch1_2.add_module(
+            "branch1_conv2",
+            ConvBlock(
+                f_out1 + self.sequence_branch1_1[0].out_channels,
+                max(8, 128 // self.kernels_divider),
+            ),
+        )
+        self.sequence_branch1_2.add_module(
+            "branch1_conv3",
+            nn.Conv2d(
+                self.sequence_branch1_2[-1].out_channels,
+                self.yolo_layer_input_size,
+                kernel_size=1,
+            ),
+        )
 
         self.sequence_branch2 = nn.Sequential()
-        self.sequence_branch2.add_module('branch2_conv1', ConvBlock(f_out2, max(8, 128 //  self.kernels_divider)))
-        self.sequence_branch2.add_module('branch2_conv2', nn.Conv2d(self.sequence_branch2[-1].out_channels, self.yolo_layer_input_size, kernel_size=1))
+        self.sequence_branch2.add_module(
+            "branch2_conv1", ConvBlock(f_out2, max(8, 128 // self.kernels_divider))
+        )
+        self.sequence_branch2.add_module(
+            "branch2_conv2",
+            nn.Conv2d(
+                self.sequence_branch2[-1].out_channels,
+                self.yolo_layer_input_size,
+                kernel_size=1,
+            ),
+        )
         # ======================================================================
 
         self.yolo1, self.yolo2 = self._create_yolo_layers()
@@ -110,10 +130,10 @@ class YOLOv3TinyShuffle(YOLOBase):
         return torch.cat(io, 1), p
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from torchsummary import summary
 
-    device = 'cpu'
+    device = "cpu"
     model = YOLOv3TinyShuffle(n_class=1).to(device)
     summary(model, (3, 608, 608), device=device)
 

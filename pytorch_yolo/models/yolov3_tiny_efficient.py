@@ -23,27 +23,30 @@ class EfficientEncoder(nn.Module):
     def __init__(self, in_channels=3):
         super().__init__()
 
-        model = EfficientNet.from_pretrained('efficientnet-b0')
+        model = EfficientNet.from_pretrained("efficientnet-b0")
 
         if in_channels == 3:
-            self.stem = nn.Sequential(model._conv_stem,
-                                 model._bn0,
-                                 SwissActivation())
+            self.stem = nn.Sequential(model._conv_stem, model._bn0, SwissActivation())
         else:
             conv = model._conv_stem
-            bn  = model._bn0
+            bn = model._bn0
             self.stem = nn.Sequential(
-                model._conv_stem.__class__(in_channels, conv.out_channels,
-                          kernel_size=conv.kernel_size,stride=conv.stride,
-                          bias=False),
-                nn.BatchNorm2d(num_features=bn.num_features,
-                               momentum=bn.momentum,
-                               eps=bn.eps),
-                SwissActivation())
+                model._conv_stem.__class__(
+                    in_channels,
+                    conv.out_channels,
+                    kernel_size=conv.kernel_size,
+                    stride=conv.stride,
+                    bias=False,
+                ),
+                nn.BatchNorm2d(
+                    num_features=bn.num_features, momentum=bn.momentum, eps=bn.eps
+                ),
+                SwissActivation(),
+            )
 
         self.route = 11
-        self.sequence1 = nn.ModuleList(model._blocks[:self.route])
-        self.sequence2 = nn.ModuleList(model._blocks[self.route:])
+        self.sequence1 = nn.ModuleList(model._blocks[: self.route])
+        self.sequence2 = nn.ModuleList(model._blocks[self.route :])
 
         self.drop_connect_rate = model._global_params.drop_connect_rate
 
@@ -85,23 +88,43 @@ class YOLOv3TinyEfficient(YOLOBase):
         self.features = EfficientEncoder(in_channels=self.in_channels)
         f_out1, f_out2 = self.features.out_channels
 
-
         self.sequence_branch1_1 = nn.Sequential()
-        self.sequence_branch1_1.add_module('branch1_conv1', ConvBlock(f_out2, max(8, 128 // self.kernels_divider), size=1))
-        self.sequence_branch1_1.add_module('branch1_upsample', Upsample(2))
+        self.sequence_branch1_1.add_module(
+            "branch1_conv1",
+            ConvBlock(f_out2, max(8, 128 // self.kernels_divider), size=1),
+        )
+        self.sequence_branch1_1.add_module("branch1_upsample", Upsample(2))
 
         self.sequence_branch1_2 = nn.Sequential()
-        self.sequence_branch1_2.add_module('branch1_concat', Concat(1))
-        self.sequence_branch1_2.add_module('branch1_conv2', ConvBlock(f_out1 + self.sequence_branch1_1[0].out_channels, max(8, 128 // self.kernels_divider)))
-        self.sequence_branch1_2.add_module('branch1_conv3', nn.Conv2d(self.sequence_branch1_2[-1].out_channels,
-                                                                      self.yolo_layer_input_size,
-                                                                      kernel_size=1))
+        self.sequence_branch1_2.add_module("branch1_concat", Concat(1))
+        self.sequence_branch1_2.add_module(
+            "branch1_conv2",
+            ConvBlock(
+                f_out1 + self.sequence_branch1_1[0].out_channels,
+                max(8, 128 // self.kernels_divider),
+            ),
+        )
+        self.sequence_branch1_2.add_module(
+            "branch1_conv3",
+            nn.Conv2d(
+                self.sequence_branch1_2[-1].out_channels,
+                self.yolo_layer_input_size,
+                kernel_size=1,
+            ),
+        )
 
         self.sequence_branch2 = nn.Sequential()
-        self.sequence_branch2.add_module('branch2_conv1', ConvBlock(f_out2, max(8, 128 // self.kernels_divider)))
-        self.sequence_branch2.add_module('branch2_conv2', nn.Conv2d(self.sequence_branch2[-1].out_channels,
-                                                                    self.yolo_layer_input_size,
-                                                                    kernel_size=1))
+        self.sequence_branch2.add_module(
+            "branch2_conv1", ConvBlock(f_out2, max(8, 128 // self.kernels_divider))
+        )
+        self.sequence_branch2.add_module(
+            "branch2_conv2",
+            nn.Conv2d(
+                self.sequence_branch2[-1].out_channels,
+                self.yolo_layer_input_size,
+                kernel_size=1,
+            ),
+        )
         # ======================================================================
 
         # YOLO Layers
@@ -147,10 +170,10 @@ class YOLOv3TinyEfficient(YOLOBase):
         return torch.cat(io, 1), p
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from torchsummary import summary
 
-    device = 'cpu'
+    device = "cpu"
     model = YOLOv3TinyEfficient(n_class=1).to(device)
     summary(model, (3, 608, 608), device=device)
 
