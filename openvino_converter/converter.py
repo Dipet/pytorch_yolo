@@ -68,15 +68,16 @@ if __name__ == '__main__':
     from models.yolov3_spp import YOLOv3SPP
     from models.yolov3 import YOLOv3
     from tensorboardX import SummaryWriter
+    from models.lite_yolo import LiteYOLOv3
 
     device = 'cpu'
     img_size = 416
     in_channels = 3
-    divider = 2
+    divider = 1
     input_shape = (1, in_channels, img_size, img_size)
     from torchsummary import summary
 
-    model = YOLOv3SPP(n_class=1, in_channels=in_channels, onnx=True, in_shape=input_shape, kernels_divider=divider,
+    model = LiteYOLOv3(n_class=1, in_channels=in_channels, onnx=True, in_shape=input_shape, kernels_divider=divider,
                       anchors=[[(10, 13), (16, 30), (33, 23)],
                                [(30, 61), (62, 45), (59, 119)],
                                [(116, 90), (156, 198), (373, 326)]]
