@@ -107,11 +107,7 @@ class CSVDataset(Dataset):  # for training/testing
             data = self.transform(**data)
 
         if labels is not None:
-            labels = (
-                np.array(data["bboxes"])
-                if len(data["bboxes"])
-                else np.zeros((0,) + labels.shape[1:])
-            )
+            labels = np.array(data["bboxes"]) if len(data["bboxes"]) else np.zeros((0,) + labels.shape[1:])
             return data["image"], labels
 
         return data["image"]
@@ -134,10 +130,7 @@ class CSVDataset(Dataset):  # for training/testing
     def __getitem__(self, index):
         img, labels = self._get_data(index)
         img, labels = self.use_transform(img, labels)
-        return (
-            self._convert_img_for_net(img),
-            self._convert_labels_for_net(labels, img),
-        )
+        return (self._convert_img_for_net(img), self._convert_labels_for_net(labels, img))
 
     @staticmethod
     def equalize_shapes(images, labels=None):

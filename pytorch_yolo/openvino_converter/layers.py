@@ -55,18 +55,10 @@ class OpenVINOLayer:
 
     def get_xml(self, blob_buff: bytearray):
         element = ET.Element(
-            "layer",
-            attrib={
-                "id": str(self.id),
-                "name": self.name,
-                "precision": self.precision,
-                "type": self.type,
-            },
+            "layer", attrib={"id": str(self.id), "name": self.name, "precision": self.precision, "type": self.type}
         )
         if self.data:
-            data = ET.Element(
-                "data", attrib={str(i): str(j) for i, j in self.data.items()}
-            )
+            data = ET.Element("data", attrib={str(i): str(j) for i, j in self.data.items()})
             element.append(data)
 
         if self.inputs:
@@ -99,9 +91,7 @@ class OpenVINOLayer:
                 offset = len(blob_buff)
                 blob_buff += array.astype(dtype).tobytes()
                 size = len(blob_buff) - offset
-                blob = ET.Element(
-                    str(key), attrib={"offset": str(offset), "size": str(size)}
-                )
+                blob = ET.Element(str(key), attrib={"offset": str(offset), "size": str(size)})
                 blobs.append(blob)
             element.append(blobs)
 
@@ -119,19 +109,13 @@ class OpenVINOConv2D(OpenVINOLayer):
         super().__init__(*args, **kwargs)
 
         self.data["auto_pad"] = "same_upper"
-        self.data["dilations"] = ",".join(
-            [str(i) for i in _int_to_tuple(self.module.dilation)]
-        )
-        self.data["kernel"] = ",".join(
-            [str(i) for i in _int_to_tuple(self.module.kernel_size)]
-        )
+        self.data["dilations"] = ",".join([str(i) for i in _int_to_tuple(self.module.dilation)])
+        self.data["kernel"] = ",".join([str(i) for i in _int_to_tuple(self.module.kernel_size)])
         self.data["output"] = str(self.module.out_channels)
         self.data["group"] = str(self.module.groups)
         self.data["pads_begin"] = "1,1"
         self.data["pads_end"] = "1,1"
-        self.data["strides"] = ",".join(
-            [str(i) for i in _int_to_tuple(self.module.stride)]
-        )
+        self.data["strides"] = ",".join([str(i) for i in _int_to_tuple(self.module.stride)])
 
         state = self.module.state_dict()
         self.blobs["weights"] = state["weight"].detach().cpu().numpy()
@@ -157,13 +141,9 @@ class OpenVINOMaxPool(OpenVINOLayer):
             self.data["pads_begin"] = "0,0"
             self.data["pads_end"] = "0,0"
         self.data["exclude-pad"] = "true"
-        self.data["kernel"] = ",".join(
-            [str(i) for i in _int_to_tuple(self.module.kernel_size)]
-        )
+        self.data["kernel"] = ",".join([str(i) for i in _int_to_tuple(self.module.kernel_size)])
         self.data["pool-method"] = "max"
-        self.data["strides"] = ",".join(
-            [str(i) for i in _int_to_tuple(self.module.stride)]
-        )
+        self.data["strides"] = ",".join([str(i) for i in _int_to_tuple(self.module.stride)])
 
 
 class OpenVINOResample(OpenVINOLayer):

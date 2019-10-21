@@ -16,67 +16,36 @@ class YOLOv3Tiny(YOLOBase):
         # Darknet Encoder
         # ======================================================================
         self.sequence_1 = nn.Sequential()
+        self.sequence_1.add_module("conv1", ConvPoolBlock(self.in_channels, max(8, 16 // self.kernels_divider)))
         self.sequence_1.add_module(
-            "conv1", ConvPoolBlock(self.in_channels, max(8, 16 // self.kernels_divider))
+            "conv2", ConvPoolBlock(self.sequence_1[-1].out_channels, max(8, 32 // self.kernels_divider))
         )
         self.sequence_1.add_module(
-            "conv2",
-            ConvPoolBlock(
-                self.sequence_1[-1].out_channels, max(8, 32 // self.kernels_divider)
-            ),
+            "conv3", ConvPoolBlock(self.sequence_1[-1].out_channels, max(8, 64 // self.kernels_divider))
         )
         self.sequence_1.add_module(
-            "conv3",
-            ConvPoolBlock(
-                self.sequence_1[-1].out_channels, max(8, 64 // self.kernels_divider)
-            ),
+            "conv4", ConvPoolBlock(self.sequence_1[-1].out_channels, max(8, 128 // self.kernels_divider))
         )
         self.sequence_1.add_module(
-            "conv4",
-            ConvPoolBlock(
-                self.sequence_1[-1].out_channels, max(8, 128 // self.kernels_divider)
-            ),
-        )
-        self.sequence_1.add_module(
-            "conv5",
-            ConvBlock(
-                self.sequence_1[-1].out_channels, max(8, 256 // self.kernels_divider)
-            ),
+            "conv5", ConvBlock(self.sequence_1[-1].out_channels, max(8, 256 // self.kernels_divider))
         )
 
         self.sequence_2 = nn.Sequential()
         self.sequence_2.add_module("max_pool5", nn.MaxPool2d(2, 2))
         self.sequence_2.add_module(
             "conv6",
-            ConvPoolBlock(
-                self.sequence_1[-1].out_channels,
-                max(8, 512 // self.kernels_divider),
-                pool_stride=1,
-            ),
+            ConvPoolBlock(self.sequence_1[-1].out_channels, max(8, 512 // self.kernels_divider), pool_stride=1),
         )
         self.sequence_2.add_module(
-            "conv7",
-            ConvBlock(
-                self.sequence_2[-1].out_channels, max(8, 1024 // self.kernels_divider)
-            ),
+            "conv7", ConvBlock(self.sequence_2[-1].out_channels, max(8, 1024 // self.kernels_divider))
         )
         self.sequence_2.add_module(
-            "conv8",
-            ConvBlock(
-                self.sequence_2[-1].out_channels,
-                max(8, 256 // self.kernels_divider),
-                size=1,
-            ),
+            "conv8", ConvBlock(self.sequence_2[-1].out_channels, max(8, 256 // self.kernels_divider), size=1)
         )
 
         self.sequence_branch1_1 = nn.Sequential()
         self.sequence_branch1_1.add_module(
-            "branch1_conv1",
-            ConvBlock(
-                self.sequence_2[-1].out_channels,
-                max(8, 128 // self.kernels_divider),
-                size=1,
-            ),
+            "branch1_conv1", ConvBlock(self.sequence_2[-1].out_channels, max(8, 128 // self.kernels_divider), size=1)
         )
         self.sequence_branch1_1.add_module("branch1_upsample", Upsample(2))
 
@@ -85,34 +54,22 @@ class YOLOv3Tiny(YOLOBase):
         self.sequence_branch1_2.add_module(
             "branch1_conv2",
             ConvBlock(
-                self.sequence_1[-1].out_channels
-                + self.sequence_branch1_1[0].out_channels,
+                self.sequence_1[-1].out_channels + self.sequence_branch1_1[0].out_channels,
                 max(8, 256 // self.kernels_divider),
             ),
         )
         self.sequence_branch1_2.add_module(
             "branch1_conv3",
-            nn.Conv2d(
-                self.sequence_branch1_2[-1].out_channels,
-                self.yolo_layer_input_size,
-                kernel_size=1,
-            ),
+            nn.Conv2d(self.sequence_branch1_2[-1].out_channels, self.yolo_layer_input_size, kernel_size=1),
         )
 
         self.sequence_branch2 = nn.Sequential()
         self.sequence_branch2.add_module(
-            "branch2_conv1",
-            ConvBlock(
-                self.sequence_2[-1].out_channels, max(8, 512 // self.kernels_divider)
-            ),
+            "branch2_conv1", ConvBlock(self.sequence_2[-1].out_channels, max(8, 512 // self.kernels_divider))
         )
         self.sequence_branch2.add_module(
             "branch2_conv2",
-            nn.Conv2d(
-                self.sequence_branch2[-1].out_channels,
-                self.yolo_layer_input_size,
-                kernel_size=1,
-            ),
+            nn.Conv2d(self.sequence_branch2[-1].out_channels, self.yolo_layer_input_size, kernel_size=1),
         )
         # ======================================================================
 

@@ -58,9 +58,7 @@ def fuse_conv_and_bn(conv, bn):
             b_conv = conv.bias
         else:
             b_conv = torch.zeros(conv.weight.size(0))
-        b_bn = bn.bias - bn.weight.mul(bn.running_mean).div(
-            torch.sqrt(bn.running_var + bn.eps)
-        )
+        b_bn = bn.bias - bn.weight.mul(bn.running_mean).div(torch.sqrt(bn.running_var + bn.eps))
         fusedconv.bias.copy_(b_conv + b_bn)
 
         return fusedconv

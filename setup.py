@@ -60,7 +60,5 @@ setup(
     long_description_content_type="text/markdown",
     author="Mikhail Druzhinin",
     license="MIT",
-    install_requires=get_install_requirements(
-        INSTALL_REQUIRES, CHOOSE_INSTALL_REQUIRES
-    ),
+    install_requires=get_install_requirements(INSTALL_REQUIRES, CHOOSE_INSTALL_REQUIRES),
 )

@@ -36,9 +36,7 @@ class LetterBox(DualTransform):
             elif r > 1:
                 shape = [1, 1 / r]
 
-            target_shape = (
-                np.ceil(np.array(shape) * self.new_shape / 32).astype(np.int) * 32
-            )
+            target_shape = np.ceil(np.array(shape) * self.new_shape / 32).astype(np.int) * 32
         else:
             target_shape = self.new_shape
 
@@ -72,40 +70,17 @@ class LetterBox(DualTransform):
         )
         return params
 
-    def apply(
-        self, img, pad_left, pad_right, pad_top, pad_bottom, resize_ratio, **params
-    ):
+    def apply(self, img, pad_left, pad_right, pad_top, pad_bottom, resize_ratio, **params):
         img = cv.resize(
-            img,
-            None,
-            fx=resize_ratio,
-            fy=resize_ratio,
-            interpolation=self.interpolation,
+            img, None, fx=resize_ratio, fy=resize_ratio, interpolation=self.interpolation
         )  # resized, no border
         img = cv.copyMakeBorder(
-            img,
-            pad_top,
-            pad_bottom,
-            pad_left,
-            pad_right,
-            self.border_mode,
-            value=self.border_color,
+            img, pad_top, pad_bottom, pad_left, pad_right, self.border_mode, value=self.border_color
         )  # padded square
 
         return img
 
-    def apply_to_bbox(
-        self,
-        bbox,
-        pad_left,
-        pad_right,
-        pad_top,
-        pad_bottom,
-        resize_ratio,
-        cols,
-        rows,
-        **params
-    ):
+    def apply_to_bbox(self, bbox, pad_left, pad_right, pad_top, pad_bottom, resize_ratio, cols, rows, **params):
         x_min, y_min, x_max, y_max = denormalize_bbox(bbox, rows, cols)
         bbox = [
             x_min * resize_ratio + pad_left,
@@ -114,9 +89,7 @@ class LetterBox(DualTransform):
             y_max * resize_ratio + pad_top,
         ]
         return normalize_bbox(
-            bbox,
-            rows * resize_ratio + pad_top + pad_bottom,
-            cols * resize_ratio + pad_left + pad_right,
+            bbox, rows * resize_ratio + pad_top + pad_bottom, cols * resize_ratio + pad_left + pad_right
         )
 
     def apply_to_keypoint(self, keypoint, **params):

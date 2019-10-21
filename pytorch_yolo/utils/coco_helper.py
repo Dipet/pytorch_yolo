@@ -27,16 +27,7 @@ def create_category(supercategory="", id=1, name=""):
     return {"supercategory": supercategory, "id": id, "name": name}
 
 
-def create_image_info(
-    file_name,
-    height,
-    width,
-    license_id=1,
-    coco_url="",
-    date_captured="",
-    flickr_url="",
-    id=1,
-):
+def create_image_info(file_name, height, width, license_id=1, coco_url="", date_captured="", flickr_url="", id=1):
     return {
         "license": license_id,
         "file_name": file_name,
@@ -49,9 +40,7 @@ def create_image_info(
     }
 
 
-def create_annotation_info(
-    image_id: int, bbox: list, segmentation=(), area=0, iscrowd=0, category_id=1, id=1
-):
+def create_annotation_info(image_id: int, bbox: list, segmentation=(), area=0, iscrowd=0, category_id=1, id=1):
     return {
         "segmentation": list(segmentation),
         "area": area,
@@ -63,15 +52,10 @@ def create_annotation_info(
     }
 
 
-def dataset_from_dict(
-    data: dict, categories=(("car", "vehicle"),), image_dir="", has_image_info=False
-):
+def dataset_from_dict(data: dict, categories=(("car", "vehicle"),), image_dir="", has_image_info=False):
     info = create_info()
     license = create_license()
-    category_info = [
-        create_category(id=i, name=cat, supercategory=sup)
-        for i, (cat, sup) in enumerate(categories)
-    ]
+    category_info = [create_category(id=i, name=cat, supercategory=sup) for i, (cat, sup) in enumerate(categories)]
 
     images_info = []
     annotation_info = []
@@ -94,9 +78,7 @@ def dataset_from_dict(
             ]
 
             annotation_info.append(
-                create_annotation_info(
-                    id=anno_id, bbox=bbox, image_id=i, category_id=item_info["type"]
-                )
+                create_annotation_info(id=anno_id, bbox=bbox, image_id=i, category_id=item_info["type"])
             )
             anno_id += 1
 
@@ -123,12 +105,7 @@ def dataset_from_df(df: pd.DataFrame, categories=(("car", "vehicle"),), image_di
 
 
 def create_result_info(image_id: int, category_id: int, bbox: list, score: float):
-    return {
-        "image_id": image_id,
-        "category_id": category_id,
-        "bbox": bbox,
-        "score": score,
-    }
+    return {"image_id": image_id, "category_id": category_id, "bbox": bbox, "score": score}
 
 
 def results_from_dict(data: dict, annotations: dict):
@@ -141,12 +118,7 @@ def results_from_dict(data: dict, annotations: dict):
         for pred in item:
             cat_id = pred["type"]
             score = pred["score"]
-            bbox = [
-                pred["left"],
-                pred["top"],
-                pred["right"] - pred["left"] + 1,
-                pred["bottom"] - pred["top"] + 1,
-            ]
+            bbox = [pred["left"], pred["top"], pred["right"] - pred["left"] + 1, pred["bottom"] - pred["top"] + 1]
 
             results.append(create_result_info(image_id, cat_id, bbox, score))
 

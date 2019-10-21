@@ -91,11 +91,7 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
     ).clamp(0)
 
     # Union Area
-    union_area = (
-        ((b1_x2 - b1_x1) * (b1_y2 - b1_y1) + 1e-16)
-        + (b2_x2 - b2_x1) * (b2_y2 - b2_y1)
-        - inter_area
-    )
+    union_area = ((b1_x2 - b1_x1) * (b1_y2 - b1_y1) + 1e-16) + (b2_x2 - b2_x1) * (b2_y2 - b2_y1) - inter_area
 
     return inter_area / union_area  # iou
 
@@ -354,34 +350,12 @@ def bench_results(results_path, cocoGt):
     mean_iou = iou / len(cocoEval.ious)
     print(f"Mean IOU: {mean_iou:.2f}")
 
-    metrics = [
-        "AP",
-        "AP50",
-        "AP75",
-        "APS",
-        "APM",
-        "APL",
-        "AR1",
-        "AR10",
-        "AR100",
-        "ARS",
-        "ARM",
-        "ARL",
-        "IOU",
-    ]
+    metrics = ["AP", "AP50", "AP75", "APS", "APM", "APL", "AR1", "AR10", "AR100", "ARS", "ARM", "ARL", "IOU"]
 
     return dict(zip(metrics, list(cocoEval.stats) + [mean_iou]))
 
 
-def test_model(
-    model: torch.nn.Module,
-    dataset,
-    batch_size,
-    num_workers,
-    device,
-    conf_thresh=0.1,
-    nms_thresh=0.1,
-):
+def test_model(model: torch.nn.Module, dataset, batch_size, num_workers, device, conf_thresh=0.1, nms_thresh=0.1):
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -395,17 +369,13 @@ def test_model(
 
     df_predicted = {}
 
-    for imgs, targets, imgs_path, shapes in tqdm(
-        dataloader, total=len(dataloader), desc="Validation"
-    ):
+    for imgs, targets, imgs_path, shapes in tqdm(dataloader, total=len(dataloader), desc="Validation"):
         imgs = imgs.to(device)
         with torch.no_grad():
             p, _ = model(imgs)
 
         det = non_max_suppression(p, conf_thresh, nms_thresh)
-        df_predicted = _dict_from_results(
-            df_predicted, det, imgs_path, shapes, imgs.shape[-2:]
-        )
+        df_predicted = _dict_from_results(df_predicted, det, imgs_path, shapes, imgs.shape[-2:])
 
     results = tempfile.NamedTemporaryFile("w+")
 

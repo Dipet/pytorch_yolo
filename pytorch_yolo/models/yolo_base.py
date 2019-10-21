@@ -72,14 +72,7 @@ class MaxPool(nn.MaxPool2d):
 
 class ConvPoolBlock(ConvBlock):
     def __init__(
-        self,
-        in_channels,
-        out_channels,
-        conv_size=3,
-        conv_stride=1,
-        conv_pad=True,
-        pool_size=2,
-        pool_stride=2,
+        self, in_channels, out_channels, conv_size=3, conv_stride=1, conv_pad=True, pool_size=2, pool_stride=2
     ):
         super().__init__(in_channels, out_channels, conv_size, conv_stride, conv_pad)
         self.sequence.add_module("max_pool", MaxPool(pool_size, pool_stride))
@@ -91,10 +84,7 @@ class YOLOBase(nn.Module):
         in_channels=3,
         n_class=80,
         kernels_divider=1,
-        anchors=(
-            ((10.0, 14.0), (23.0, 27.0), (37.0, 58.0)),
-            ((81.0, 82.0), (135.0, 169.0), (344.0, 319.0)),
-        ),
+        anchors=(((10.0, 14.0), (23.0, 27.0), (37.0, 58.0)), ((81.0, 82.0), (135.0, 169.0), (344.0, 319.0))),
         onnx=False,
         in_shape=None,
         hyper_params=None,
@@ -133,16 +123,7 @@ class YOLOBase(nn.Module):
 
         for anchor, dummy in zip(self.anchors, dummies):
             if self.onnx:
-                layers.append(
-                    YOLOLayer(
-                        anchor,
-                        self.n_class,
-                        self.anchors,
-                        self.onnx,
-                        dummy,
-                        max(self.in_shape[-2:]),
-                    )
-                )
+                layers.append(YOLOLayer(anchor, self.n_class, self.anchors, self.onnx, dummy, max(self.in_shape[-2:])))
             else:
                 layers.append(YOLOLayer(anchor, self.n_class, self.anchors, self.onnx))
 
@@ -175,17 +156,10 @@ class YOLOBase(nn.Module):
         # Try to download weights if not available locally
         if not os.path.isfile(weights_path):
             try:
-                os.system(
-                    "wget https://pjreddie.com/media/files/"
-                    + weights_file
-                    + " -O "
-                    + weights_path
-                )
+                os.system("wget https://pjreddie.com/media/files/" + weights_file + " -O " + weights_path)
             except IOError:
                 print(f"{weights_path} not found.")
-                print(
-                    "Try https://drive.google.com/drive/folders/1uxgUBemJVw9wZsdpboYbzUN4bcRhsuAI"
-                )
+                print("Try https://drive.google.com/drive/folders/1uxgUBemJVw9wZsdpboYbzUN4bcRhsuAI")
 
         # Open the weights file
         with open(weights_path, "rb") as f:

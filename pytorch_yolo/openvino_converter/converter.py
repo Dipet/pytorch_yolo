@@ -22,9 +22,7 @@ class OpenVINOConverter:
         model_graph = ModelGraph()
         for i, node in enumerate(graph.inputs()):
             if omit_useless_nodes:
-                if (
-                    len(node.uses()) == 0
-                ):  # number of user of the node (= number of outputs/ fanout)
+                if len(node.uses()) == 0:  # number of user of the node (= number of outputs/ fanout)
                     continue
 
             if i < n_inputs:

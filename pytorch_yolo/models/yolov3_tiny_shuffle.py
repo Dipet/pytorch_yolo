@@ -53,8 +53,7 @@ class YOLOv3TinyShuffle(YOLOBase):
 
         self.sequence_branch1_1 = nn.Sequential()
         self.sequence_branch1_1.add_module(
-            "branch1_conv1",
-            ConvBlock(f_out2, max(8, 128 // self.kernels_divider), size=1),
+            "branch1_conv1", ConvBlock(f_out2, max(8, 128 // self.kernels_divider), size=1)
         )
         self.sequence_branch1_1.add_module("branch1_upsample", Upsample(2))
 
@@ -62,31 +61,18 @@ class YOLOv3TinyShuffle(YOLOBase):
         self.sequence_branch1_2.add_module("branch1_concat", Concat(1))
         self.sequence_branch1_2.add_module(
             "branch1_conv2",
-            ConvBlock(
-                f_out1 + self.sequence_branch1_1[0].out_channels,
-                max(8, 128 // self.kernels_divider),
-            ),
+            ConvBlock(f_out1 + self.sequence_branch1_1[0].out_channels, max(8, 128 // self.kernels_divider)),
         )
         self.sequence_branch1_2.add_module(
             "branch1_conv3",
-            nn.Conv2d(
-                self.sequence_branch1_2[-1].out_channels,
-                self.yolo_layer_input_size,
-                kernel_size=1,
-            ),
+            nn.Conv2d(self.sequence_branch1_2[-1].out_channels, self.yolo_layer_input_size, kernel_size=1),
         )
 
         self.sequence_branch2 = nn.Sequential()
-        self.sequence_branch2.add_module(
-            "branch2_conv1", ConvBlock(f_out2, max(8, 128 // self.kernels_divider))
-        )
+        self.sequence_branch2.add_module("branch2_conv1", ConvBlock(f_out2, max(8, 128 // self.kernels_divider)))
         self.sequence_branch2.add_module(
             "branch2_conv2",
-            nn.Conv2d(
-                self.sequence_branch2[-1].out_channels,
-                self.yolo_layer_input_size,
-                kernel_size=1,
-            ),
+            nn.Conv2d(self.sequence_branch2[-1].out_channels, self.yolo_layer_input_size, kernel_size=1),
         )
         # ======================================================================
 

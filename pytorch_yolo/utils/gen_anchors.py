@@ -58,10 +58,7 @@ def print_anchors(centroids):
         r += "%0.2f,%0.2f, " % (anchors[i, 0], anchors[i, 1])
 
     # there should not be comma after last anchor, that's why
-    r += "%0.2f,%0.2f" % (
-        anchors[sorted_indices[-1:], 0],
-        anchors[sorted_indices[-1:], 1],
-    )
+    r += "%0.2f,%0.2f" % (anchors[sorted_indices[-1:], 0], anchors[sorted_indices[-1:], 1])
     r += "]"
 
     print(r)
@@ -69,13 +66,7 @@ def print_anchors(centroids):
 
 def main(train_path, num_anchors, img_size):
     dataset = CSVDatasetInference(train_path, img_size=img_size)
-    dataloader = DataLoader(
-        dataset,
-        batch_size=16,
-        shuffle=False,
-        num_workers=6,
-        collate_fn=dataset.collate_fn,
-    )
+    dataloader = DataLoader(dataset, batch_size=16, shuffle=False, num_workers=6, collate_fn=dataset.collate_fn)
 
     # run k_mean to find the anchors
     ann_w = []
@@ -96,12 +87,7 @@ def main(train_path, num_anchors, img_size):
     centroids = kmeans.cluster_centers_
 
     # write anchors to file
-    print(
-        "\naverage IOU for",
-        num_anchors,
-        "anchors:",
-        "%0.2f" % avg_iou(annotation_dims, centroids),
-    )
+    print("\naverage IOU for", num_anchors, "anchors:", "%0.2f" % avg_iou(annotation_dims, centroids))
     print(f"Mean distance: {kmeans.inertia_:.2f}")
     print_anchors(centroids)
 

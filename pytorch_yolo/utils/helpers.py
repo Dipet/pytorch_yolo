@@ -35,12 +35,7 @@ def images_to_gray(paths):
 
 
 def save_keras_ssd(df: pd.DataFrame, path):
-    df.to_csv(
-        path,
-        index=False,
-        columns=["image_path", "left", "right", "top", "bottom", "type"],
-        header=False,
-    )
+    df.to_csv(path, index=False, columns=["image_path", "left", "right", "top", "bottom", "type"], header=False)
 
 
 def compute_iou(bbox1, bbox2):

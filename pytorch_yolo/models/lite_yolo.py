@@ -45,60 +45,33 @@ class LiteYOLOv3(YOLOBase):
         self.down = [self.down1, self.down2, self.down3, self.down4, self.down5]
 
         self.seq = nn.Sequential()
-        self.seq.add_module(
-            "conv1", ConvBlock(self.down[-1].out_channels, 512 // kd, 1)
-        )
+        self.seq.add_module("conv1", ConvBlock(self.down[-1].out_channels, 512 // kd, 1))
 
         self.seq_y1 = nn.Sequential()
-        self.seq_y1.add_module(
-            "conv1", ConvBlock(self.seq[-1].out_channels, 1024 // kd, 3)
-        )
-        self.seq_y1.add_module(
-            "conv2",
-            nn.Conv2d(self.seq_y1[-1].out_channels, self.yolo_layer_input_size, 1, 1),
-        )
+        self.seq_y1.add_module("conv1", ConvBlock(self.seq[-1].out_channels, 1024 // kd, 3))
+        self.seq_y1.add_module("conv2", nn.Conv2d(self.seq_y1[-1].out_channels, self.yolo_layer_input_size, 1, 1))
 
         self.seqy2_1 = nn.Sequential()
-        self.seqy2_1.add_module(
-            "conv", ConvBlock(self.seq[-1].out_channels, 256 // kd, 1)
-        )
+        self.seqy2_1.add_module("conv", ConvBlock(self.seq[-1].out_channels, 256 // kd, 1))
         self.seqy2_1.add_module("up", Upsample(2))
 
         self.seqy2_2 = nn.Sequential()
         self.seqy2_2.add_module("concat", Concat(1))
-        self.seqy2_2.add_module(
-            "conv1",
-            Conv(self.seqy2_1[0].out_channels + self.down4.out_channels, 512 // kd),
-        )
-        self.seqy2_2.add_module(
-            "conv2", ConvBlock(self.seqy2_2[-1].out_channels, 256 // kd, 1)
-        )
+        self.seqy2_2.add_module("conv1", Conv(self.seqy2_1[0].out_channels + self.down4.out_channels, 512 // kd))
+        self.seqy2_2.add_module("conv2", ConvBlock(self.seqy2_2[-1].out_channels, 256 // kd, 1))
 
         self.seqy2_3 = nn.Sequential()
-        self.seqy2_3.add_module(
-            "conv6", ConvBlock(self.seqy2_2[-1].out_channels, 512 // kd)
-        )
-        self.seqy2_3.add_module(
-            "conv7",
-            nn.Conv2d(self.seqy2_3[-1].out_channels, self.yolo_layer_input_size, 1, 1),
-        )
+        self.seqy2_3.add_module("conv6", ConvBlock(self.seqy2_2[-1].out_channels, 512 // kd))
+        self.seqy2_3.add_module("conv7", nn.Conv2d(self.seqy2_3[-1].out_channels, self.yolo_layer_input_size, 1, 1))
 
         self.seqy3_1 = nn.Sequential()
-        self.seqy3_1.add_module(
-            "conv", ConvBlock(self.seqy2_2[-1].out_channels, 128 // kd, 1)
-        )
+        self.seqy3_1.add_module("conv", ConvBlock(self.seqy2_2[-1].out_channels, 128 // kd, 1))
         self.seqy3_1.add_module("up", Upsample(2))
 
         self.seqy3_2 = nn.Sequential()
         self.seqy3_2.add_module("concat", Concat(1))
-        self.seqy3_2.add_module(
-            "conv1",
-            Conv(self.seqy3_1[0].out_channels + self.down3.out_channels, 256 // kd),
-        )
-        self.seqy3_2.add_module(
-            "conv2",
-            ConvBlock(self.seqy3_2[-1].out_channels, self.yolo_layer_input_size),
-        )
+        self.seqy3_2.add_module("conv1", Conv(self.seqy3_1[0].out_channels + self.down3.out_channels, 256 // kd))
+        self.seqy3_2.add_module("conv2", ConvBlock(self.seqy3_2[-1].out_channels, self.yolo_layer_input_size))
 
         self.yolo1, self.yolo2, self.yolo3 = self._create_yolo_layers()
 
@@ -165,11 +138,7 @@ if __name__ == "__main__":
         n_class=80,
         onnx=False,
         in_shape=(1, 3, 320, 320),
-        anchors=[
-            [(10, 13), (16, 30), (33, 23)],
-            [(30, 61), (62, 45), (59, 119)],
-            [(116, 90), (156, 198), (373, 326)],
-        ],
+        anchors=[[(10, 13), (16, 30), (33, 23)], [(30, 61), (62, 45), (59, 119)], [(116, 90), (156, 198), (373, 326)]],
     ).to(device)
     dummy = torch.rand((1, 3, 320, 320)).to(device)
     summary(model, input_size=(3, 416, 416))
