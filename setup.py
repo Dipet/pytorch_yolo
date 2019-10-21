@@ -1,12 +1,12 @@
 import io
 import os
 import re
-import sys
-from setuptools import setup, find_packages
+from setuptools import setup
 from pkg_resources import DistributionNotFound, get_distribution
 
 
-INSTALL_REQUIRES = ["numpy>=1.11.1", "scipy", "imgaug>=0.2.5,<0.2.7", "PyYAML"]
+INSTALL_REQUIRES = []
+CHOOSE_INSTALL_REQUIRES = []
 
 
 def get_version():
@@ -14,13 +14,6 @@ def get_version():
     version_file = os.path.join(current_dir, "albumentations", "__init__.py")
     with io.open(version_file, encoding="utf-8") as f:
         return re.search(r'^__version__ = [\'"]([^\'"]*)[\'"]', f.read(), re.M).group(1)
-
-
-def get_test_requirements():
-    requirements = ["pytest"]
-    if sys.version_info < (3, 3):
-        requirements.append("mock")
-    return requirements
 
 
 def get_long_description():
@@ -51,14 +44,12 @@ def get_install_requirements(install_requires, choose_install_requires):
 
 
 setup(
-    name="albumentations",
+    name="pytorch_yolo",
     version=get_version(),
-    description="Fast image augmentation library and easy to use wrapper around other libraries",
+    description="YOLO models implementation",
     long_description=get_long_description(),
     long_description_content_type="text/markdown",
-    author="Buslaev Alexander, Alexander Parinov, Vladimir Iglovikov, Eugene Khvedchenya, Druzhinin Mikhail",
+    author="Mikhail Druzhinin",
     license="MIT",
-    url="https://github.com/albu/albumentations",
-    packages=find_packages(exclude=["tests"]),
     install_requires=get_install_requirements(INSTALL_REQUIRES, CHOOSE_INSTALL_REQUIRES),
 )
