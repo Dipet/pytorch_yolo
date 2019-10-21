@@ -66,15 +66,17 @@ if __name__ == '__main__':
 
     from models.yolov3_tiny import YOLOv3Tiny
     from models.yolov3_spp import YOLOv3SPP
+    from models.yolov3 import YOLOv3
     from tensorboardX import SummaryWriter
 
     device = 'cpu'
-    img_size = 416
-    in_channels = 1
+    img_size = 320
+    in_channels = 3
+    divider = 1
     input_shape = (1, in_channels, img_size, img_size)
     from torchsummary import summary
 
-    model = YOLOv3SPP(n_class=1, in_channels=in_channels, onnx=True, in_shape=input_shape, kernels_divider=2,
+    model = YOLOv3(n_class=1, in_channels=in_channels, onnx=True, in_shape=input_shape, kernels_divider=divider,
                       anchors=[[(10, 13), (16, 30), (33, 23)],
                                [(30, 61), (62, 45), (59, 119)],
                                [(116, 90), (156, 198), (373, 326)]]

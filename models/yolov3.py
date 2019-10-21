@@ -115,6 +115,16 @@ class YOLOv3(YOLOBase):
         io, p = list(zip(*out))  # inference output, training output
         return torch.cat(io, 1), p
 
+    @property
+    def yolo_layers(self):
+        return self.yolo1, self.yolo2, self.yolo3
+
+    def load_darknet_weights(self, weights_path, warnings=True):
+        raise NotImplementedError()
+
+    def save_darknet_weights(self, path, warnings=True):
+        raise NotImplementedError()
+
 
 if __name__ == '__main__':
     from torchsummary import summary
