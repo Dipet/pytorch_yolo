@@ -19,11 +19,11 @@ class YOLOv3(YOLOBase):
 
         self.conv1 = ConvBlock(self.in_channels, 32 // kd)
 
-        self.down1 = DownSample(self.conv1.out_channels, 64 // kd, 32 // kd, repeat=0)
-        self.down2 = DownSample(self.down1.out_channels, 128 // kd, 64 // kd, repeat=1)
-        self.down3 = DownSample(self.down2.out_channels, 256 // kd, 128 // kd, repeat=7)
-        self.down4 = DownSample(self.down3.out_channels, 512 // kd, 256 // kd, repeat=7)
-        self.down5 = DownSample(self.down4.out_channels, 1024 // kd, 512 // kd, repeat=3)
+        self.down1 = DownSample(self.conv1.out_channels, 64 // kd, repeat=0)
+        self.down2 = DownSample(self.down1.out_channels, 128 // kd, repeat=1)
+        self.down3 = DownSample(self.down2.out_channels, 256 // kd, repeat=7)
+        self.down4 = DownSample(self.down3.out_channels, 512 // kd, repeat=7)
+        self.down5 = DownSample(self.down4.out_channels, 1024 // kd, repeat=3)
         self.down = [self.down1, self.down2, self.down3, self.down4, self.down5]
 
         self.seq = nn.Sequential()
