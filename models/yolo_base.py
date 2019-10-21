@@ -109,6 +109,11 @@ class YOLOBase(nn.Module):
 
         self.encoder = None
 
+    def fuse(self):
+        for layer in self.modules():
+            if isinstance(layer, ConvBlock):
+                layer.fuse()
+
     def _create_yolo_layers(self, device='cpu'):
         layers = []
 

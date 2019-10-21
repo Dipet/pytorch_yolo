@@ -54,18 +54,39 @@ class OpenVINOConverter:
 
 
 if __name__ == '__main__':
+    from torch import nn
+
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = nn.Conv2d(3, 3, 3)
+
+        def forward(self, x):
+            return self.conv(x)
+
     from models.yolov3_tiny import YOLOv3Tiny
+    from models.yolov3_spp import YOLOv3SPP
+    from models.yolov3 import YOLOv3
     from tensorboardX import SummaryWriter
+    from models.lite_yolo import LiteYOLOv3
 
     device = 'cpu'
-    img_size = 320
-    input_shape = (1, 3, img_size, img_size)
+    img_size = 416
+    in_channels = 3
+    divider = 1
+    input_shape = (1, in_channels, img_size, img_size)
     from torchsummary import summary
 
-    model = YOLOv3Tiny(n_class=80, onnx=False, in_shape=input_shape, kernels_divider=1).to(device).eval()
-    summary(model, input_shape[1:], device=device)
+    model = LiteYOLOv3(n_class=1, in_channels=in_channels, onnx=True, in_shape=input_shape, kernels_divider=divider,
+                      anchors=[[(10, 13), (16, 30), (33, 23)],
+                               [(30, 61), (62, 45), (59, 119)],
+                               [(116, 90), (156, 198), (373, 326)]]
+                      ).to(device).eval()
     model.fuse()
-    writer = SummaryWriter()
+    # model = Model().to(device).eval()
+    summary(model, input_shape[1:], device=device, batch_size=1)
+    # writer = SummaryWriter()
     dummy = torch.rand(input_shape).to(device)
-
+    # import torch
+    # torch.onnx.export(model, dummy, 'test.onnx')
     OpenVINOConverter.save(model, dummy, 'test')

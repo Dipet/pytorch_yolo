@@ -109,11 +109,17 @@ if __name__ == '__main__':
     from tensorboardX import SummaryWriter
     from torch import onnx
     from torchsummary import summary
+    from models.yolov3_spp import YOLOv3SPP
 
     device = 'cpu'
-    model = YOLOv3Tiny(n_class=1, onnx=False, in_shape=(1, 3, 320, 320)).to(device).eval()
-    dummy = torch.rand((1, 3, 320, 320)).to(device)
-    summary(model, (3, 608, 608), device=device)
+    model = YOLOv3SPP(n_class=1, in_channels=1, onnx=False, in_shape=(1, 1, 416, 416), kernels_divider=1,
+                      anchors=[[(10, 13), (16, 30), (33, 23)],
+                               [(30, 61), (62, 45), (59, 119)],
+                               [(116, 90), (156, 198), (373, 326)]]
+                      ).to(device).eval()
+    dummy = torch.rand((1, 1, 416, 416)).to(device)
+    pred = model(dummy)
+    summary(model, (1, 416, 416), device=device)
     # onnx.export(model, dummy, 'test.onnx')
     # model(dummy)
     #

@@ -9,28 +9,39 @@ except:
     from .yolo_layer import Concat, Upsample, YOLOLayer
 
 
+class Add(nn.Module):
+    def forward(self, x, y):
+        return x + y
+
+
 class DownSample(nn.Module):
-    def __init__(self, in_channels, channels1, channels2, repeat=0):
+    def __init__(self, in_channels, out_channels, repeat=0):
         super().__init__()
 
-        self._out_channels = channels1
-        self.conv0 = ConvBlock(in_channels, channels1, size=3, stride=2)
+        self._out_channels = out_channels
+        self.conv0 = ConvBlock(in_channels, out_channels, size=3, stride=2)
         repeat += 1
 
-        self.tail = nn.ModuleList()
+        self.tail = []
+        self.adds = []
         for i in range(repeat):
-            self.tail.append(nn.Sequential(
-                ConvBlock(channels1, channels2, size=1, stride=1),
-                ConvBlock(channels2, channels1, size=3, stride=1)
+            name = f'seq{i}'
+            name_add = f'add{i}'
+            setattr(self, name, nn.Sequential(
+                ConvBlock(out_channels, out_channels // 2, size=1, stride=1),
+                ConvBlock(out_channels // 2, out_channels, size=3, stride=1)
             ))
+            setattr(self, name_add, Add())
+            self.tail.append(getattr(self, name))
+            self.adds.append(getattr(self, name_add))
 
     def forward(self, x):
         x = self.conv0(x)
         sub = x
 
-        for module in self.tail:
+        for module, add in zip(self.tail, self.adds):
             sub = module(x)
-            x = x + sub
+            x = add(x, sub)
 
         return x, sub
 
@@ -43,21 +54,23 @@ class YOLOv3SPP(YOLOBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        kd = self.kernels_divider
+
         # Darknet Encoder
         # ======================================================================
-        self.conv1 = ConvBlock(self.in_channels, 32, stride=1, size=3)
+        self.conv1 = ConvBlock(self.in_channels, 32 // kd, stride=1, size=3)
 
-        self.down = nn.ModuleList()
-        self.down.append(DownSample(self.conv1.out_channels, channels1=64, channels2=32, repeat=0))
-        self.down.append(DownSample(self.down[-1].out_channels, channels1=128, channels2=64, repeat=1))
-        self.down.append(DownSample(self.down[-1].out_channels, channels1=256, channels2=128, repeat=7))
-        self.down.append(DownSample(self.down[-1].out_channels, channels1=512, channels2=256, repeat=7))
-        self.down.append(DownSample(self.down[-1].out_channels, channels1=1024, channels2=512, repeat=3))
+        self.down1 = DownSample(self.conv1.out_channels, 64 // kd, repeat=0)
+        self.down2 = DownSample(self.down1.out_channels, 128 // kd, repeat=1)
+        self.down3 = DownSample(self.down2.out_channels, 256 // kd, repeat=7)
+        self.down4 = DownSample(self.down3.out_channels, 512 // kd, repeat=7)
+        self.down5 = DownSample(self.down4.out_channels, 1024 // kd, repeat=3)
+        self.down = [self.down1, self.down2, self.down3, self.down4, self.down5]
 
         self.sequence_spp = nn.Sequential()
-        self.sequence_spp.add_module('conv1', ConvBlock(self.down[-1].out_channels, 512, size=1, stride=1))
-        self.sequence_spp.add_module('conv2', ConvBlock(self.sequence_spp[-1].out_channels, 1024, size=3, stride=1))
-        self.sequence_spp.add_module('conv3', ConvBlock(self.sequence_spp[-1].out_channels, 512, size=1, stride=1))
+        self.sequence_spp.add_module('conv1', ConvBlock(self.down[-1].out_channels, 512 // kd, size=1, stride=1))
+        self.sequence_spp.add_module('conv2', ConvBlock(self.sequence_spp[-1].out_channels, 1024 // kd, size=3, stride=1))
+        self.sequence_spp.add_module('conv3', ConvBlock(self.sequence_spp[-1].out_channels, 512 // kd, size=1, stride=1))
 
         self.spp1 = MaxPool(size=5, stride=1)
         self.spp2 = MaxPool(size=9, stride=1)
@@ -65,42 +78,42 @@ class YOLOv3SPP(YOLOBase):
 
         self.branch1_1 = nn.Sequential()
         self.branch1_1.add_module('concat', Concat(1))
-        self.branch1_1.add_module('conv1', ConvBlock(self.sequence_spp[-1].out_channels * 4, 512, size=1, stride=1))
-        self.branch1_1.add_module('conv2', ConvBlock(self.branch1_1[-1].out_channels, 1024, size=3, stride=1))
-        self.branch1_1.add_module('conv3', ConvBlock(self.branch1_1[-1].out_channels, 512, size=1, stride=1))
+        self.branch1_1.add_module('conv1', ConvBlock(self.sequence_spp[-1].out_channels * 4, 512 // kd, size=1, stride=1))
+        self.branch1_1.add_module('conv2', ConvBlock(self.branch1_1[-1].out_channels, 1024 // kd, size=3, stride=1))
+        self.branch1_1.add_module('conv3', ConvBlock(self.branch1_1[-1].out_channels, 512 // kd, size=1, stride=1))
         self.branch1_2 = nn.Sequential()
-        self.branch1_2.add_module('conv1', ConvBlock(self.branch1_1[-1].out_channels, 1024, size=3, stride=1))
+        self.branch1_2.add_module('conv1', ConvBlock(self.branch1_1[-1].out_channels, 1024 // kd, size=3, stride=1))
         self.branch1_2.add_module('conv2', ConvBlock(self.branch1_2[-1].out_channels, self.yolo_layer_input_size, size=1, stride=1))
 
-        self.branch2_1 = nn.Sequential(ConvBlock(self.branch1_1[-1].out_channels, 256, size=1, stride=1),
+        self.branch2_1 = nn.Sequential(ConvBlock(self.branch1_1[-1].out_channels, 256 // kd, size=1, stride=1),
                                        Upsample(2))
         self.branch2_2 = nn.Sequential()
         self.branch2_2.add_module('concat', Concat(1))
-        self.branch2_2.add_module('conv1', ConvBlock(self.branch2_1[0].out_channels + self.down[3].out_channels, 256, size=1, stride=1))
-        self.branch2_2.add_module('conv2', ConvBlock(self.branch2_2[-1].out_channels, 512, size=3, stride=1))
-        self.branch2_2.add_module('conv3', ConvBlock(self.branch2_2[-1].out_channels, 256, size=1, stride=1))
-        self.branch2_2.add_module('conv4', ConvBlock(self.branch2_2[-1].out_channels, 512, size=3, stride=1))
-        self.branch2_2.add_module('conv5', ConvBlock(self.branch2_2[-1].out_channels, 256, size=1, stride=1))
+        self.branch2_2.add_module('conv1', ConvBlock(self.branch2_1[0].out_channels + self.down[3].out_channels, 256 // kd, size=1, stride=1))
+        self.branch2_2.add_module('conv2', ConvBlock(self.branch2_2[-1].out_channels, 512 // kd, size=3, stride=1))
+        self.branch2_2.add_module('conv3', ConvBlock(self.branch2_2[-1].out_channels, 256 // kd, size=1, stride=1))
+        self.branch2_2.add_module('conv4', ConvBlock(self.branch2_2[-1].out_channels, 512 // kd, size=3, stride=1))
+        self.branch2_2.add_module('conv5', ConvBlock(self.branch2_2[-1].out_channels, 256 // kd, size=1, stride=1))
         self.branch2_3 = nn.Sequential()
-        self.branch2_3.add_module('conv6', ConvBlock(self.branch2_2[-1].out_channels, 512, size=3, stride=1))
+        self.branch2_3.add_module('conv6', ConvBlock(self.branch2_2[-1].out_channels, 512 // kd, size=3, stride=1))
         self.branch2_3.add_module('conv7', ConvBlock(self.branch2_3[-1].out_channels, self.yolo_layer_input_size, size=1, stride=1))
 
-        self.branch3_1 = nn.Sequential(ConvBlock(self.branch2_2[-1].out_channels, 128, size=1, stride=1),
+        self.branch3_1 = nn.Sequential(ConvBlock(self.branch2_2[-1].out_channels, 128 // kd, size=1, stride=1),
                                        Upsample(2))
         self.branch3_2 = nn.Sequential()
         self.branch3_2.add_module('concat', Concat(1))
-        self.branch3_2.add_module('conv1', ConvBlock(self.branch3_1[0].out_channels + self.down[2].out_channels, 128, size=1, stride=1))
-        self.branch3_2.add_module('conv2', ConvBlock(self.branch3_2[-1].out_channels, 256, size=3, stride=1))
-        self.branch3_2.add_module('conv3', ConvBlock(self.branch3_2[-1].out_channels, 128, size=1, stride=1))
-        self.branch3_2.add_module('conv4', ConvBlock(self.branch3_2[-1].out_channels, 256, size=3, stride=1))
-        self.branch3_2.add_module('conv5', ConvBlock(self.branch3_2[-1].out_channels, 128, size=1, stride=1))
-        self.branch3_2.add_module('conv6', ConvBlock(self.branch3_2[-1].out_channels, 256, size=3, stride=1))
+        self.branch3_2.add_module('conv1', ConvBlock(self.branch3_1[0].out_channels + self.down[2].out_channels, 128 // kd, size=1, stride=1))
+        self.branch3_2.add_module('conv2', ConvBlock(self.branch3_2[-1].out_channels, 256 // kd, size=3, stride=1))
+        self.branch3_2.add_module('conv3', ConvBlock(self.branch3_2[-1].out_channels, 128 // kd, size=1, stride=1))
+        self.branch3_2.add_module('conv4', ConvBlock(self.branch3_2[-1].out_channels, 256 // kd, size=3, stride=1))
+        self.branch3_2.add_module('conv5', ConvBlock(self.branch3_2[-1].out_channels, 128 // kd, size=1, stride=1))
+        self.branch3_2.add_module('conv6', ConvBlock(self.branch3_2[-1].out_channels, 256 // kd, size=3, stride=1))
         self.branch3_2.add_module('conv7', ConvBlock(self.branch3_2[-1].out_channels, self.yolo_layer_input_size, size=1, stride=1))
         # ======================================================================
 
         # YOLO Layers
         # ======================================================================
-        self.yolo3, self.yolo2, self.yolo1 = self._create_yolo_layers()
+        self.yolo1, self.yolo2, self.yolo3 = self._create_yolo_layers()
         # ======================================================================
 
     def _forward_encoder(self, x):
