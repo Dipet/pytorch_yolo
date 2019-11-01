@@ -12,8 +12,21 @@ except:
 
 
 class YOLOv3(YOLOBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+            self,
+            in_channels=3,
+            n_class=80,
+            kernels_divider=1,
+            anchors=(
+                    ((10, 13), (16, 30), (33, 23)),
+                    ((30, 61), (62, 45), (59, 119)),
+                    ((116, 90), (156, 198), (373, 326))
+            ),
+            onnx=False,
+            in_shape=None,
+            hyper_params=None,
+    ):
+        super().__init__(in_channels, n_class, kernels_divider, anchors, onnx, in_shape, hyper_params)
 
         kd = self.kernels_divider
 

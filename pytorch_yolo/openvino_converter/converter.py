@@ -4,7 +4,7 @@ from torch import jit
 from torch import onnx
 from tensorboardX.pytorch_graph import NodePyIO, NodePyOP
 
-from pytorch_yolo.openvino_converter import ModelGraph
+from pytorch_yolo.openvino_converter.graph import ModelGraph
 
 
 __all__ = ["OpenVINOConverter"]
@@ -64,18 +64,19 @@ if __name__ == "__main__":
         def forward(self, x):
             return self.conv(x)
 
-    from pytorch_yolo.models import LiteYOLOv3
+    from pytorch_yolo.models.yolov3 import YOLOv3
 
     device = "cpu"
     img_size = 416
-    in_channels = 3
-    divider = 1
+    in_channels = 1
+    divider = 2
+    n_class = 1
     input_shape = (1, in_channels, img_size, img_size)
     from torchsummary import summary
 
     model = (
-        LiteYOLOv3(
-            n_class=1,
+        YOLOv3(
+            n_class=n_class,
             in_channels=in_channels,
             onnx=True,
             in_shape=input_shape,

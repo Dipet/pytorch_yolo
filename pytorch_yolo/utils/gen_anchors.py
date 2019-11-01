@@ -64,18 +64,15 @@ def print_anchors(centroids):
     print(r)
 
 
-def main(train_path, num_anchors, img_size):
-    dataset = CSVDatasetInference(train_path, img_size=img_size)
-    dataloader = DataLoader(dataset, batch_size=16, shuffle=False, num_workers=6, collate_fn=dataset.collate_fn)
-
+def get_anchors(labels, num_anchors):
     # run k_mean to find the anchors
     ann_w = []
     ann_h = []
-    for image, labels, im0 in tqdm(dataloader):
+    for d in tqdm(dataloader):
         for label in labels:
-            label = label.astype(float)
-            relative_w = label[:, 3] - label[:, 1]
-            relative_h = label[:, 4] - label[:, 2]
+            label = label.numpy().astype(float)
+            relative_w = label[3] - label[1]
+            relative_h = label[4] - label[2]
             ann_h.append(relative_h)
             ann_w.append(relative_w)
 
@@ -86,10 +83,21 @@ def main(train_path, num_anchors, img_size):
     kmeans = KMeans(num_anchors, verbose=False).fit(annotation_dims)
     centroids = kmeans.cluster_centers_
 
-    # write anchors to file
-    print("\naverage IOU for", num_anchors, "anchors:", "%0.2f" % avg_iou(annotation_dims, centroids))
-    print(f"Mean distance: {kmeans.inertia_:.2f}")
+    iou = avg_iou(annotation_dims, centroids)
+    distance = kmeans.inertia_
+
+    print("\naverage IOU for", num_anchors, "anchors:", "%0.2f" % iou)
+    print(f"Mean distance: {distance:.2f}")
     print_anchors(centroids)
+
+    return iou, distance, centroids
+
+
+def main(train_path, num_anchors, img_size):
+    dataset = CSVDatasetInference(train_path, img_size=img_size)
+    dataloader = DataLoader(dataset, batch_size=16, shuffle=False, num_workers=6, collate_fn=dataset.collate_fn)
+
+    iou, distance, centroids = get_anchors(dataloader, num_anchors)
 
 
 if __name__ == "__main__":

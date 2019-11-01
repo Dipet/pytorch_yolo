@@ -5,11 +5,11 @@ from .layers import *
 from torch import nn
 from collections import OrderedDict
 from pytorch_yolo.models.yolo_layer import Upsample, Concat, YOLOLayer
-from pytorch_yolo.models import Add
+from pytorch_yolo.models.yolov3_spp import Add
 from tensorboardX.pytorch_graph import GraphPy
 
 from xml.dom import minidom
-from pytorch_yolo.models import MaxPool
+from pytorch_yolo.models.yolo_base import MaxPool
 
 
 class OpenVINOGraph:
