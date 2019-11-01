@@ -59,13 +59,13 @@ class DarknetV3(Encoder):
             ResBlock(conv_channels[4], conv_channels[5], res_blocks[4]),
         )
 
-        self.outputs = [3, 4]
+        self.outputs = [3, 4, 5]
         self.out_channels = [conv_channels[i] for i in self.outputs]
 
     def forward(self, x):
         outputs = []
         for i, layer in enumerate(self.sequence):
-            x =  layer(x)
+            x = layer(x)
             if i in self.outputs:
                 outputs.append(x)
 

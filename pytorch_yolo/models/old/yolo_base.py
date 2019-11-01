@@ -65,7 +65,7 @@ class MaxPool(nn.MaxPool2d):
 
 class ConvPoolBlock(ConvBlock):
     def __init__(
-            self, in_channels, out_channels, conv_size=3, conv_stride=1, conv_pad=True, pool_size=2, pool_stride=2
+        self, in_channels, out_channels, conv_size=3, conv_stride=1, conv_pad=True, pool_size=2, pool_stride=2
     ):
         super().__init__(in_channels, out_channels, conv_size, conv_stride, conv_pad)
         self.sequence.add_module("max_pool", MaxPool(pool_size, pool_stride))
@@ -92,11 +92,11 @@ class Concat(nn.Module):
 
 class YOLOBase(nn.Module):
     def __init__(
-            self,
-            in_channels=3,
-            num_class=80,
-            anchors=(((10.0, 14.0), (23.0, 27.0), (37.0, 58.0)), ((81.0, 82.0), (135.0, 169.0), (344.0, 319.0))),
-            activation=None,
+        self,
+        in_channels=3,
+        num_class=80,
+        anchors=(((10.0, 14.0), (23.0, 27.0), (37.0, 58.0)), ((81.0, 82.0), (135.0, 169.0), (344.0, 319.0))),
+        activation=None,
     ):
         super().__init__()
 

@@ -1,33 +1,8 @@
 from torch import nn
 
-from models.layers.darknet_layers import ConvBlock
-from models.layers.common import Concat, Upsample
-
-
-class YOLOLayer(nn.Module):
-    def __init__(self, num_classes, anchors):
-        super().__init__()
-
-        self.anchors = anchors
-        self.num_classes = num_classes
-
-    def forward(self, p, img_size):
-        batch_size, num_channels, height, width = p.shape
-
-        if (self.n_x_grids, self.n_y_grids) != (height, width):
-            self.create_grids(p.device)
-
-        p = (
-            p.view(batch_size, len(self.anchors), self.num_classes + 5, height, width)
-            .permute(0, 1, 3, 4, 2)
-            .contiguous()
-        )
-
-        return p
-
-    @property
-    def input_channels(self):
-        return (self.num_classes + 5) * len(self.anchors)
+from pytorch_yolo.models.layers.darknet_layers import ConvBlock
+from pytorch_yolo.models.layers.common import Concat, Upsample
+from pytorch_yolo.models.layers.yolo_layer import YoloLayer
 
 
 class TinyV3Decoder(nn.Module):
@@ -35,8 +10,9 @@ class TinyV3Decoder(nn.Module):
         self,
         in_channels=(256, 1024),
         num_classes=80,
-        anchors=(((10, 14), (23, 27), (37, 58)), ((81, 82), (135, 169), (344, 319))),
-        channels=((256, 512), (128, 256)),
+        anchors=(((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((116, 90), (156, 198), (373, 326))),
+        channels=(256, 128),
+        activation=None,
     ):
         super().__init__()
         self.anchosrs = anchors
@@ -45,26 +21,23 @@ class TinyV3Decoder(nn.Module):
 
         assert len(anchors) == 2, "Tiny YOLO supports only 2 YOLO layers!"
         assert len(channels) == 2, "Tiny YOLO supports only 2 YOLO layers!"
-        self.yolo1 = YOLOLayer(num_classes, anchors[0])
-        self.yolo2 = YOLOLayer(num_classes, anchors[1])
+        self.yolo1 = YoloLayer(num_classes, anchors[0], activation)
+        self.yolo2 = YoloLayer(num_classes, anchors[1], activation)
 
-        self.conv1 = self._gen_yolo_conv([in_channels[0]] + list(channels[0]), self.yolo1)
-        self.conv2 = self._gen_yolo_conv([in_channels[1]] + list(channels[1]), self.yolo2)
+        self.conv1 = self._make_last_layers(in_channels[0], channels[0], self.yolo1.input_channels)
+        self.conv2 = self._make_last_layers(in_channels[1], channels[1], self.yolo2.input_channels)
+
         self.concat = Concat(1)
         self.upsample = Upsample(2)
 
-    def _gen_yolo_conv(self, channels, yolo_layer: YOLOLayer):
-        assert len(channels) >= 1, "Empty channels for YOLO layer."
+    def _make_last_layers(self, in_channels, num_channels, yolo_input_channels):
+        double_channels = 2 * num_channels
 
-        layers = nn.Sequential()
-
-        for i, (ic1, oc1) in enumerate(zip(channels[:-1], channels[1:])):
-            if i % 2 == 0:
-                layers.add_module(f"conv{i}", ConvBlock(ic1, oc1, 1))
-            else:
-                layers.add_module(f"conv{i}", ConvBlock(ic1, oc1, 3))
-
-        layers.add_module("conv_last", ConvBlock(channels[-1], yolo_layer.input_channels, 1))
+        layers = nn.Sequential(
+            ConvBlock(in_channels, double_channels, 1),
+            ConvBlock(double_channels, num_channels, 3),
+            ConvBlock(num_channels, yolo_input_channels, 1),
+        )
 
         return layers
 
@@ -83,3 +56,70 @@ class TinyV3Decoder(nn.Module):
         x1, x2 = x2, x1
 
         return self.yolo1(x1), self.yolo2(x2)
+
+
+class YoloV3Decoder(nn.Module):
+    def __init__(
+        self,
+        in_channels=(256, 512, 1024),
+        num_classes=80,
+        anchors=(((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((116, 90), (156, 198), (373, 326))),
+        channels=(128, 256, 512),
+        activation=None,
+    ):
+        super().__init__()
+
+        self.anchosrs = anchors
+        self.num_classes = num_classes
+        self.channels = channels
+
+        assert len(anchors) == 3, "YOLOv3 supports only 3 YOLO layers!"
+        assert len(channels) == 3, "YOLOv3 supports only 3 YOLO layers!"
+        self.yolo1, self.yolo2, self.yolo3 = [YoloLayer(i, num_classes, activation) for i in anchors]
+
+        self.sub_head1, self.head1 = self._make_last_layers(in_channels[0] + channels[0], channels[0], self.yolo1.input_channels)
+        self.sub_head2, self.head2 = self._make_last_layers(in_channels[1] + channels[1], channels[1], self.yolo2.input_channels)
+        self.sub_head3, self.head3 = self._make_last_layers(in_channels[2], channels[2], self.yolo3.input_channels)
+
+        self.concat = Concat(dim=1)
+        self.up2 = nn.Sequential(ConvBlock(channels[2], channels[1], 1), Upsample(2))
+        self.up1 = nn.Sequential(ConvBlock(channels[1], channels[0], 1), Upsample(2))
+
+    def _make_last_layers(self, in_channels, num_channels, yolo_input_channels):
+        double_out_channels = num_channels * 2
+
+        x = nn.Sequential(
+            ConvBlock(in_channels, num_channels, 1),
+            ConvBlock(num_channels, double_out_channels, 3),
+            ConvBlock(double_out_channels, num_channels, 1),
+            ConvBlock(num_channels, double_out_channels, 3),
+            ConvBlock(double_out_channels, num_channels, 1),
+        )
+
+        y = nn.Sequential(
+            ConvBlock(num_channels, double_out_channels, 3), nn.Conv2d(double_out_channels, yolo_input_channels, 1, 1, 1)
+        )
+
+        return x, y
+
+    def forward(self, x, image_shape):
+        img_size = max(image_shape)
+        x1, x2, x3 = x
+
+        x = self.sub_head3(x3)
+        x3 = self.head3(x)
+        y3 = self.yolo3(x3, img_size)
+
+        x = self.up2(x)
+        x = self.concat([x, x2])
+        x = self.sub_head2(x)
+        x2 = self.head2(x)
+        y2 = self.yolo2(x2, img_size)
+
+        x = self.up1(x)
+        x = self.concat([x, x1])
+        x = self.sub_head1(x)
+        x1 = self.head1(x)
+        y1 = self.yolo1(x1, img_size)
+
+        return y1, y2, y3

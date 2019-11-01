@@ -85,13 +85,12 @@ class ResBlock(nn.Module):
 
     def forward(self, x):
         x = self.conv0(x)
-        sub = x
 
         for module, add in zip(self.tail, self.adds):
             sub = module(x)
             x = add(x, sub)
 
-        return x, sub
+        return x
 
     @property
     def out_channels(self):
