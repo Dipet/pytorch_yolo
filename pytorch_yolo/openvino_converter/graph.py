@@ -82,7 +82,7 @@ class OpenVINOGraph:
         bin_name = os.path.join(save_dir, name + ".bin")
 
         net = ET.Element("net", attrib={"name": name, "version": "5", "batch": "1"})
-        layers = ET.Element("layers")
+        layers = ET.Element("decoders")
         blob_buff = bytearray()
         edges = ET.Element("edges")
         for i, (name, item) in enumerate(self.openvino_layers.items()):

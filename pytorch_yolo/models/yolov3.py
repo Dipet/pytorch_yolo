@@ -13,18 +13,14 @@ except:
 
 class YOLOv3(YOLOBase):
     def __init__(
-            self,
-            in_channels=3,
-            n_class=80,
-            kernels_divider=1,
-            anchors=(
-                    ((10, 13), (16, 30), (33, 23)),
-                    ((30, 61), (62, 45), (59, 119)),
-                    ((116, 90), (156, 198), (373, 326))
-            ),
-            onnx=False,
-            in_shape=None,
-            hyper_params=None,
+        self,
+        in_channels=3,
+        n_class=80,
+        kernels_divider=1,
+        anchors=(((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((116, 90), (156, 198), (373, 326))),
+        onnx=False,
+        in_shape=None,
+        hyper_params=None,
     ):
         super().__init__(in_channels, n_class, kernels_divider, anchors, onnx, in_shape, hyper_params)
 
@@ -32,11 +28,11 @@ class YOLOv3(YOLOBase):
 
         self.conv1 = ConvBlock(self.in_channels, 32 // kd)
 
-        self.down1 = DownSample(self.conv1.out_channels, 64 // kd, repeat=0)
-        self.down2 = DownSample(self.down1.out_channels, 128 // kd, repeat=1)
-        self.down3 = DownSample(self.down2.out_channels, 256 // kd, repeat=7)
-        self.down4 = DownSample(self.down3.out_channels, 512 // kd, repeat=7)
-        self.down5 = DownSample(self.down4.out_channels, 1024 // kd, repeat=3)
+        self.down1 = DownSample(self.conv1.out_channels, 64 // kd, repeat=1)
+        self.down2 = DownSample(self.down1.out_channels, 128 // kd, repeat=2)
+        self.down3 = DownSample(self.down2.out_channels, 256 // kd, repeat=8)
+        self.down4 = DownSample(self.down3.out_channels, 512 // kd, repeat=8)
+        self.down5 = DownSample(self.down4.out_channels, 1024 // kd, repeat=4)
         self.down = [self.down1, self.down2, self.down3, self.down4, self.down5]
 
         self.seq = nn.Sequential()
@@ -148,10 +144,11 @@ if __name__ == "__main__":
 
     device = "cuda"
     model = YOLOv3(
-        n_class=80,
+        n_class=1,
         onnx=False,
-        in_shape=(1, 3, 320, 320),
+        in_shape=(1, 1, 416, 416),
         anchors=[[(10, 13), (16, 30), (33, 23)], [(30, 61), (62, 45), (59, 119)], [(116, 90), (156, 198), (373, 326)]],
     ).to(device)
-    dummy = torch.rand((1, 3, 320, 320)).to(device)
-    summary(model, input_size=(3, 416, 416))
+
+    # dummy = torch.rand((1, 3, 320, 320)).to(device)
+    # summary(model, input_size=(3, 416, 416))

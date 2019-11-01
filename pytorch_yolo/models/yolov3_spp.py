@@ -15,12 +15,11 @@ class Add(nn.Module):
 
 
 class DownSample(nn.Module):
-    def __init__(self, in_channels, out_channels, repeat=0):
+    def __init__(self, in_channels, out_channels, repeat=1):
         super().__init__()
 
         self._out_channels = out_channels
         self.conv0 = ConvBlock(in_channels, out_channels, size=3, stride=2)
-        repeat += 1
 
         self.tail = []
         self.adds = []

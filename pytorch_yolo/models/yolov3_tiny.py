@@ -1,12 +1,9 @@
 import torch
 from torch import nn
 
-try:
-    from yolo_base import YOLOBase, ConvBlock, ConvPoolBlock
-    from yolo_layer import Concat, Upsample
-except:
-    from .yolo_base import YOLOBase, ConvBlock, ConvPoolBlock
-    from .yolo_layer import Concat, Upsample
+
+from pytorch_yolo.models.yolo_base import YOLOBase, ConvBlock, ConvPoolBlock
+from pytorch_yolo.models.yolo_layer import Concat, Upsample
 
 
 class YOLOv3Tiny(YOLOBase):
@@ -142,7 +139,7 @@ if __name__ == "__main__":
 
     device = "cpu"
     model = (
-        YOLOv3SPP(
+        YOLOv3Tiny(
             n_class=1,
             in_channels=1,
             onnx=False,

@@ -27,8 +27,8 @@ class YOLOLayer(nn.Module):
         # (batch_size, anchors, grid, grid, xywh + classes)
         x = (
             x.view(batch_size, self.num_anchors, self.num_classes + 5, self.ny_grids, self.nx_grids)
-                .permute(0, 1, 3, 4, 2)
-                .contiguous()
+            .permute(0, 1, 3, 4, 2)
+            .contiguous()
         )
 
         if self.cls_activation is not None:

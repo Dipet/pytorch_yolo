@@ -32,7 +32,7 @@ class EfficientEncoder(nn.Module):
             bn = model._bn0
             self.stem = nn.Sequential(
                 model._conv_stem.__class__(
-                    in_channels, conv.out_channels, kernel_size=conv.kernel_size, stride=conv.stride, bias=False
+                    in_channels, conv.last_out_channels, kernel_size=conv.kernel_size, stride=conv.stride, bias=False
                 ),
                 nn.BatchNorm2d(num_features=bn.num_features, momentum=bn.momentum, eps=bn.eps),
                 SwissActivation(),
