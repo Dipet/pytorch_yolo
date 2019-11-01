@@ -1,25 +1,5 @@
 import torch
 from torch import nn
-from torch.nn import functional as F
-
-
-class Upsample(nn.Module):
-    def __init__(self, scale_factor=1, mode="nearest"):
-        super(Upsample, self).__init__()
-        self.scale_factor = scale_factor
-        self.mode = mode
-
-    def forward(self, x):
-        return F.interpolate(x, scale_factor=self.scale_factor, mode=self.mode)
-
-
-class Concat(nn.Module):
-    def __init__(self, dim=0):
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, args):
-        return torch.cat(args, self.dim)
 
 
 class YOLOLayer(nn.Module):
