@@ -6,7 +6,7 @@ from torch import nn
 from collections import OrderedDict
 
 from pytorch_yolo.utils.torch_utils import fuse_conv_and_bn
-from pytorch_yolo.models.yolo_layer import YOLOLayer
+from pytorch_yolo.models.old.yolo_layer import YOLOLayer
 
 
 class ConvBlock(nn.Module):

@@ -1,8 +1,8 @@
 import torch
 from torch import nn
 
-from pytorch_yolo.models.yolo_base import YOLOBase, ConvBlock, Concat, Upsample
-from pytorch_yolo.models.yolov3_spp import DownSample
+from pytorch_yolo.models.old.yolo_base import YOLOBase, ConvBlock, Concat, Upsample
+from pytorch_yolo.models.old.yolov3_spp import DownSample
 
 
 class YoloV3Encoder(nn.Module):

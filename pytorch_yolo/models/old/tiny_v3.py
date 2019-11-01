@@ -1,4 +1,4 @@
-from pytorch_yolo.models.model import Model
+from pytorch_yolo.models.old.model import Model
 
 from pytorch_yolo.models.encoders.darknet import DarknetTinyV3
 from pytorch_yolo.models.decoders.yolo import TinyV3Decoder

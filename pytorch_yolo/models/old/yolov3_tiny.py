@@ -2,8 +2,8 @@ import torch
 from torch import nn
 
 
-from pytorch_yolo.models.yolo_base import YOLOBase, ConvBlock, ConvPoolBlock
-from pytorch_yolo.models.yolo_layer import Concat, Upsample
+from pytorch_yolo.models.old.yolo_base import YOLOBase, ConvBlock, ConvPoolBlock
+from pytorch_yolo.models.old.yolo_layer import Concat, Upsample
 
 
 class YOLOv3Tiny(YOLOBase):
@@ -135,7 +135,6 @@ class YOLOv3Tiny(YOLOBase):
 
 if __name__ == "__main__":
     from torchsummary import summary
-    from pytorch_yolo.models import YOLOv3SPP
 
     device = "cpu"
     model = (
