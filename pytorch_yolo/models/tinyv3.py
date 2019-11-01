@@ -1,21 +1,21 @@
 from torch import nn
 
-from pytorch_yolo.models.encoders.darknet import DarknetV3
-from pytorch_yolo.models.decoders.yolo import YoloV3Decoder
+from pytorch_yolo.models.encoders.darknet import DarknetTinyV3
+from pytorch_yolo.models.decoders.yolo import TinyV3Decoder
 
 
-class YoloV3(nn.Module):
+class TinyV3(nn.Module):
     def __init__(
         self,
         in_channels=3,
         num_classes=80,
-        anchors=(((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((116, 90), (156, 198), (373, 326))),
+        anchors=(((10, 14), (23, 27), (37, 58)), ((81, 82), (135, 169), (344, 319))),
         activation=None,
     ):
         super().__init__()
 
-        self.encoder = DarknetV3(in_channels)
-        self.decoder = YoloV3Decoder(
+        self.encoder = DarknetTinyV3(in_channels)
+        self.decoder = TinyV3Decoder(
             self.encoder.out_channels, num_classes=num_classes, anchors=anchors, activation=activation
         )
 
@@ -30,5 +30,5 @@ class YoloV3(nn.Module):
 if __name__ == "__main__":
     from torchsummary import summary
 
-    model = YoloV3().eval().cuda()
+    model = TinyV3().eval().cuda()
     summary(model, (3, 416, 416))

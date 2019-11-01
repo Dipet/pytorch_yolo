@@ -23,8 +23,9 @@ class DarknetTinyV3(Encoder):
             ),
         )
 
-        self.outputs = [4, len(self.sequence) - 1]
-        self.out_channels = [conv_channels[4], conv_channels[-1]]
+        num_channels = len(conv_channels)
+        self.outputs = [num_channels - 3, num_channels - 1]
+        self.out_channels = [conv_channels[i] for i in self.outputs]
 
     def forward(self, x):
         outputs = []
@@ -59,7 +60,8 @@ class DarknetV3(Encoder):
             ResBlock(conv_channels[4], conv_channels[5], res_blocks[4]),
         )
 
-        self.outputs = [3, 4, 5]
+        num_channels = len(conv_channels)
+        self.outputs = [num_channels - 3, num_channels - 2, num_channels - 1]
         self.out_channels = [conv_channels[i] for i in self.outputs]
 
     def forward(self, x):

@@ -47,7 +47,7 @@ class MaxPool(nn.MaxPool2d):
 
 class ConvMaxPool(nn.Module):
     def __init__(
-        self, in_channels, out_channels, conv_size=3, conv_stride=3, conv_pad=True, pool_size=2, pool_stride=2
+        self, in_channels, out_channels, conv_size=3, conv_stride=1, conv_pad=True, pool_size=2, pool_stride=2
     ):
         super().__init__()
 
