@@ -38,19 +38,19 @@ class TinyV3Decoder(nn.Module):
 
         self.concat = Concat(1)
 
-    def forward(self, x, image_shape):
+    def forward(self, x, image_shape, predict=False):
         image_size = max(image_shape)
 
         x1, x2 = x
 
         x = self.sub_head2(x2)
         x2 = self.head2(x)
-        y2 = self.yolo2(x2, image_size)
+        y2 = self.yolo2(x2, image_size, predict=predict)
 
         x = self.up(x)
         x1 = self.concat([x, x1])
         x1 = self.head1(x1)
-        y1 = self.yolo1(x1, image_size)
+        y1 = self.yolo1(x1, image_size, predict=predict)
 
         return y1, y2
 
@@ -104,25 +104,25 @@ class YoloV3Decoder(nn.Module):
 
         return x, y
 
-    def forward(self, x, image_shape):
+    def forward(self, x, image_shape, predict=False):
         img_size = max(image_shape)
         x1, x2, x3 = x
 
         x = self.sub_head3(x3)
         x3 = self.head3(x)
-        y3 = self.yolo3(x3, img_size)
+        y3 = self.yolo3(x3, img_size, predict=predict)
 
         x = self.up2(x)
         x = self.concat([x, x2])
         x = self.sub_head2(x)
         x2 = self.head2(x)
-        y2 = self.yolo2(x2, img_size)
+        y2 = self.yolo2(x2, img_size, predict=predict)
 
         x = self.up1(x)
         x = self.concat([x, x1])
         x = self.sub_head1(x)
         x1 = self.head1(x)
-        y1 = self.yolo1(x1, img_size)
+        y1 = self.yolo1(x1, img_size, predict=predict)
 
         return y1, y2, y3
 
@@ -181,7 +181,8 @@ class YoloV3SppDecoder(nn.Module):
 
         return x, y
 
-    def forward(self, x):
+    def forward(self, x, image_shape, predict=False):
+        img_size = max(image_shape)
         x1, x2, x3 = x
 
         x = self.spp(x3)
@@ -189,18 +190,18 @@ class YoloV3SppDecoder(nn.Module):
 
         x = self.sub_head3(x)
         x3 = self.head3(x)
-        y3 = self.yolo3(x3)
+        y3 = self.yolo3(x3, img_size, predict=predict)
 
         x = self.up2(x)
         self.concat([x, x2])
         x = self.sub_head2(x)
         x2 = self.head2(x)
-        y2 = self.yolo2(x2)
+        y2 = self.yolo2(x2, img_size, predict=predict)
 
         x = self.up1(x)
         self.concat([x, x1])
         x = self.sub_head1(x)
         x1 = self.head1(x)
-        y1 = self.yolo1(x1)
+        y1 = self.yolo1(x1, img_size, predict=predict)
 
         return y1, y2, y3

@@ -19,12 +19,15 @@ class YoloV3(nn.Module):
             self.encoder.out_channels, num_classes=num_classes, anchors=anchors, activation=activation
         )
 
-    def forward(self, x):
+    def forward(self, x, predict=False):
         image_shape = x.shape[-2:]
 
         x = self.encoder(x)
-        x = self.decoder(x, image_shape)
+        x = self.decoder(x, image_shape, predict=predict)
         return x
+
+    def predict(self, x):
+        return self(x, predict=True)
 
 
 if __name__ == "__main__":

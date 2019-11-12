@@ -21,7 +21,7 @@ class YoloLayer(nn.Module):
 
         self.input_channels: int = self.num_anchors * (self.num_classes + 5)
 
-    def forward(self, x, img_size):
+    def forward(self, x, img_size, predict=False):
         batch_size, ny, nx = x.shape[0], x.shape[-2], x.shape[-1]
         if (self.nx_grids, self.ny_grids) != (nx, ny):
             self.create_grids(img_size, nx, ny, x.device)
@@ -33,15 +33,16 @@ class YoloLayer(nn.Module):
                 .contiguous()
         )
 
-        x[..., 0:2] = torch.sigmoid(x[..., 0:2]) + self.grid_xy
-        x[..., 2:4] = torch.exp(x[..., 2:4]) * self.anchor_wh
-
-        if not self.training:
-            x[..., :4] *= self.stride
-            x[..., 4] = torch.sigmoid(x[..., 4])
+        x[..., 0:2] = torch.sigmoid(x[..., 0:2])
 
         if self.cls_activation is not None:
             x[..., 5:] = self.cls_activation(x[..., 5:])
+
+        if predict:
+            x[..., :2] += self.grid_xy
+            x[..., 2:4] *= self.anchor_wh
+            x[..., :4] = torch.exp(x[..., :4]) * self.stride
+            x[..., 4] = torch.sigmoid(x[..., 4])
 
         return x
 
