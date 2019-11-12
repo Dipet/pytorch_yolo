@@ -10,10 +10,8 @@ import tempfile
 from pycocotools.cocoeval import COCOeval
 
 try:
-    import coco_helper
     import torch_utils
 except:
-    from . import coco_helper
     from . import torch_utils
 
 import json

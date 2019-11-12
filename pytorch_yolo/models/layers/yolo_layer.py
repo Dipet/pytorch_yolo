@@ -29,17 +29,19 @@ class YoloLayer(nn.Module):
         # (batch_size, anchors, grid, grid, xywh + classes)
         x = (
             x.view(batch_size, self.num_anchors, self.num_classes + 5, self.ny_grids, self.nx_grids)
-            .permute(0, 1, 3, 4, 2)
-            .contiguous()
+                .permute(0, 1, 3, 4, 2)
+                .contiguous()
         )
 
-        if self.cls_activation is not None:
-            x[..., 0:2] = torch.sigmoid(x[..., 0:2]) + self.grid_xy  # xy
-            x[..., 2:4] = torch.exp(x[..., 2:4]) * self.anchor_wh  # wh yolo method
-            x[..., :4] *= self.stride
+        x[..., 0:2] = torch.sigmoid(x[..., 0:2]) + self.grid_xy
+        x[..., 2:4] = torch.exp(x[..., 2:4]) * self.anchor_wh
 
-            x[..., 4] = torch.sigmoid(x[..., 4])  # p_conf
-            x[..., 5:] = self.cls_activation(x)
+        if not self.training:
+            x[..., :4] *= self.stride
+            x[..., 4] = torch.sigmoid(x[..., 4])
+
+        if self.cls_activation is not None:
+            x[..., 5:] = self.cls_activation(x[..., 5:])
 
         return x
 
