@@ -40,8 +40,8 @@ class YoloLayer(nn.Module):
 
         if predict:
             x[..., :2] += self.grid_xy
-            x[..., 2:4] *= self.anchor_wh
-            x[..., :4] = torch.exp(x[..., :4]) * self.stride
+            x[..., 2:4] = torch.exp(x[..., 2:4]) * self.anchor_wh
+            x[..., :4] = x[..., :4] * self.stride
             x[..., 4] = torch.sigmoid(x[..., 4])
 
         return x

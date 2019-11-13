@@ -21,7 +21,7 @@ def wh_iou(box1, box2):
 
 
 class YOLOLoss(_Loss):
-    def __init__(self, anchosrs, binary=False, xy=0.5, wh=0.0625, cls=0.0625, conf=4, iou_thres=0.1, cls_weights=None,
+    def __init__(self, anchosrs, binary=False, xy=1, wh=1, cls=1, conf=1, iou_thres=0.1, cls_weights=None,
                  cls_loss=nn.BCEWithLogitsLoss()):
         super().__init__()
         self.xy = xy
@@ -87,17 +87,18 @@ class YOLOLoss(_Loss):
             cls = pred[..., 5:]
 
             # Loss : Mask outputs to ignore non-existing objects (except with conf. loss)
-            loss_x = self.mse(x[obj_mask], tx[obj_mask])
-            loss_y = self.mse(y[obj_mask], ty[obj_mask])
-            loss_w = self.mse(w[obj_mask], tw[obj_mask])
-            loss_h = self.mse(h[obj_mask], th[obj_mask])
+            loss_x = self.mse(x[obj_mask], tx[obj_mask]) * self.xy
+            loss_y = self.mse(y[obj_mask], ty[obj_mask]) * self.xy
+            loss_w = self.mse(w[obj_mask], tw[obj_mask]) * self.wh
+            loss_h = self.mse(h[obj_mask], th[obj_mask]) * self.wh
 
             loss_conf_obj = self.bce(conf[obj_mask], tconf[obj_mask])
-            # loss_conf_noobj = self.bce(conf[noobj_mask], tconf[noobj_mask])
-            # loss_conf = self.obj_scale * loss_conf_obj + self.noobj_scale * loss_conf_noobj
-            loss_conf = loss_conf_obj
+            loss_conf_noobj = self.bce(conf[noobj_mask], tconf[noobj_mask])
+            loss_conf = self.obj_scale * loss_conf_obj + self.noobj_scale * loss_conf_noobj
+            # loss_conf = loss_conf_obj
+            loss_conf *= self.conf
 
-            loss_cls = self.cls_loss(cls[obj_mask], tcls[obj_mask])
+            loss_cls = self.cls_loss(cls[obj_mask], tcls[obj_mask]) * self.cls
 
             total_loss += loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls
 
@@ -118,7 +119,7 @@ class YOLOLoss(_Loss):
 
         # Output tensors
         obj_mask = torch.zeros(shape, device=device, dtype=torch.bool)
-        noobj_mask = torch.zeros(shape, device=device, dtype=torch.bool)
+        noobj_mask = torch.ones(shape, device=device, dtype=torch.bool)
         tx = torch.zeros(shape, device=device, dtype=torch.float32)
         ty = torch.zeros(shape, device=device, dtype=torch.float32)
         tw = torch.zeros(shape, device=device, dtype=torch.float32)
