@@ -21,14 +21,16 @@ def wh_iou(box1, box2):
 
 
 class YOLOLoss(_Loss):
-    def __init__(self, anchosrs, binary=False, xy=1, wh=1, cls=1, conf=1, iou_thres=0.1, cls_weights=None,
+    def __init__(self, yolo_layers, binary=False, xy=1, wh=1, cls=1, conf=1, iou_thres=0.1, cls_weights=None,
                  cls_loss=nn.BCEWithLogitsLoss()):
         super().__init__()
         self.xy = xy
         self.wh = wh
         self.cls = cls
         self.conf = conf
-        self.anchors = torch.tensor(anchosrs, dtype=torch.float32)
+
+        self.yolo_layers = yolo_layers
+
         self.iou_thres = iou_thres
         self.binary = binary
         self.cls_weights = cls_weights
@@ -76,7 +78,8 @@ class YOLOLoss(_Loss):
     def new(self, y_pred: Tensor, y_true: Tensor):
         total_loss = 0
 
-        for pred, anchors in zip(y_pred, self.anchors):
+        for pred, yolo in zip(y_pred, self.yolo_layers):
+            anchors = torch.tensor(yolo.scaled_anchors, dtype=torch.float32, device=pred.device)
             obj_mask, noobj_mask, tx, ty, tw, th, tcls, tconf = self.__build_targets(pred, y_true, anchors)
 
             x = pred[..., 0]
@@ -105,9 +108,6 @@ class YOLOLoss(_Loss):
         return total_loss
 
     def forward(self, y_pred, y_true):
-        if self.anchors.device != y_true.device:
-            self.anchors = self.anchors.to(y_true.device)
-
         return self.new(y_pred, y_true)
 
     def __build_targets(self, logits, targets, anchors):

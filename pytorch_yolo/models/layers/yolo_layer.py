@@ -16,7 +16,7 @@ class YoloLayer(nn.Module):
         self.img_size = 0
         self.stride = 0
         self.grid_xy = 0
-        self.anchor_vec = 0
+        self.scaled_anchors = 0
         self.cls_activation = class_activation
 
         self.input_channels: int = self.num_anchors * (self.num_classes + 5)
@@ -58,5 +58,5 @@ class YoloLayer(nn.Module):
         self.grid_xy = torch.stack((xv, yv), 2).to(device).float().view((1, 1, self.ny_grids, self.nx_grids, 2))
 
         # build wh gains
-        self.anchor_vec = self.anchors.to(device) / self.stride
-        self.anchor_wh = self.anchor_vec.view(1, self.num_anchors, 1, 1, 2).to(device)
+        self.scaled_anchors = self.anchors.to(device) / self.stride
+        self.anchor_wh = self.scaled_anchors.view(1, self.num_anchors, 1, 1, 2).to(device)

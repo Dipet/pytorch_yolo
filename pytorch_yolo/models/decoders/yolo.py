@@ -5,7 +5,16 @@ from pytorch_yolo.models.layers.common import Concat, Upsample
 from pytorch_yolo.models.layers.yolo_layer import YoloLayer
 
 
-class TinyV3Decoder(nn.Module):
+class BaseYoloDecoder(nn.Module):
+    def __init__(self, anchors, num_classes, activation):
+        super().__init__()
+
+        self.anchors = anchors
+        self.num_classes = num_classes
+        self.yolo_layers = [YoloLayer(a, num_classes, activation) for a in anchors]
+
+
+class TinyV3Decoder(BaseYoloDecoder):
     def __init__(
         self,
         in_channels=(256, 1024),
@@ -14,15 +23,11 @@ class TinyV3Decoder(nn.Module):
         channels=(128, 256),
         activation=None,
     ):
-        super().__init__()
-        self.anchosrs = anchors
-        self.num_classes = num_classes
-        self.channels = channels
-
         assert len(anchors) == 2, "Tiny YOLO supports only 2 YOLO layers!"
         assert len(channels) == 2, "Tiny YOLO supports only 2 YOLO layers!"
-        self.yolo1 = YoloLayer(anchors[0], num_classes, activation)
-        self.yolo2 = YoloLayer(anchors[1], num_classes, activation)
+        super().__init__(anchors, num_classes, activation)
+
+        self.yolo1, self.yolo2 = self.yolo_layers
 
         self.head1 = nn.Sequential(
             ConvBlock(in_channels[0] + channels[0], 2 * channels[0]),
@@ -55,7 +60,7 @@ class TinyV3Decoder(nn.Module):
         return y1, y2
 
 
-class YoloV3Decoder(nn.Module):
+class YoloV3Decoder(BaseYoloDecoder):
     def __init__(
         self,
         in_channels=(256, 512, 1024),
@@ -64,15 +69,11 @@ class YoloV3Decoder(nn.Module):
         channels=(128, 256, 512),
         activation=None,
     ):
-        super().__init__()
-
-        self.anchosrs = anchors
-        self.num_classes = num_classes
-        self.channels = channels
-
         assert len(anchors) == 3, "YOLOv3 supports only 3 YOLO layers!"
         assert len(channels) == 3, "YOLOv3 supports only 3 YOLO layers!"
-        self.yolo1, self.yolo2, self.yolo3 = [YoloLayer(i, num_classes, activation) for i in anchors]
+        super().__init__(anchors, num_classes, activation)
+
+        self.yolo1, self.yolo2, self.yolo3 = self.yolo_layers
 
         self.sub_head1, self.head1 = self._make_last_layers(
             in_channels[0] + channels[0], channels[0], self.yolo1.input_channels
@@ -127,7 +128,7 @@ class YoloV3Decoder(nn.Module):
         return y1, y2, y3
 
 
-class YoloV3SppDecoder(nn.Module):
+class YoloV3SppDecoder(BaseYoloDecoder):
     def __init__(
             self,
             in_channels=(256, 512, 1024),
@@ -137,15 +138,11 @@ class YoloV3SppDecoder(nn.Module):
             channels=(128, 256, 512),
             activation=None,
     ):
-        super().__init__()
-
-        self.anchosrs = anchors
-        self.num_classes = num_classes
-        self.channels = channels
-
         assert len(anchors) == 3, "YOLOv3 supports only 3 YOLO layers!"
         assert len(channels) == 3, "YOLOv3 supports only 3 YOLO layers!"
-        self.yolo1, self.yolo2, self.yolo3 = [YoloLayer(i, num_classes, activation) for i in anchors]
+        super().__init__(anchors, num_classes, activation)
+
+        self.yolo1, self.yolo2, self.yolo3 = self.yolo_layers
 
         self.spp = nn.Sequential(
             ConvBlock(in_channels[-1], channels[-1], 1),
