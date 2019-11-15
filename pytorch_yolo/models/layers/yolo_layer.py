@@ -34,14 +34,13 @@ class YoloLayer(nn.Module):
         )
 
         x[..., 0:2] = torch.sigmoid(x[..., 0:2])
-        x[..., 2:4] = torch.exp(x[..., 2:4])
 
         if self.cls_activation is not None:
             x[..., 5:] = self.cls_activation(x[..., 5:])
 
         if predict:
             x[..., :2] += self.grid_xy
-            x[..., 2:4] *= self.anchor_wh
+            x[..., 2:4] = torch.exp(x[..., 2:4]) * self.anchor_wh
             x[..., :4] = x[..., :4] * self.stride
             x[..., 4] = torch.sigmoid(x[..., 4])
 
