@@ -21,13 +21,14 @@ def wh_iou(box1, box2):
 
 
 class YOLOLoss(_Loss):
-    def __init__(self, yolo_layers, binary=False, xy=1, wh=1, cls=1, conf=1, iou_thres=0.1, cls_weights=None,
+    def __init__(self, yolo_layers, binary=False, xy=1, wh=1, cls=1, obj=1, no_obj=1, iou_thres=0.1, cls_weights=None,
                  cls_loss=nn.BCEWithLogitsLoss()):
         super().__init__()
         self.xy = xy
         self.wh = wh
         self.cls = cls
-        self.conf = conf
+        self.obj = obj
+        self.no_obj = no_obj
 
         self.yolo_layers = yolo_layers
 
@@ -38,15 +39,13 @@ class YOLOLoss(_Loss):
 
         self.mse = nn.MSELoss()
         self.bce = nn.BCEWithLogitsLoss()
-        self.obj_scale = 1
-        self.noobj_scale = 100
 
     def forward(self, y_pred, y_true):
         total_loss = 0
 
         for pred, yolo in zip(y_pred, self.yolo_layers):
             anchors = torch.tensor(yolo.scaled_anchors, dtype=torch.float32, device=pred.device)
-            obj_mask, tx, ty, tw, th, tcls, tconf = self.build_targets(pred, y_true, anchors)
+            obj_mask, no_obj_mask, tx, ty, tw, th, tcls, tconf = self.build_targets(pred, y_true, anchors)
 
             x = pred[..., 0]
             y = pred[..., 1]
@@ -62,16 +61,21 @@ class YOLOLoss(_Loss):
                 loss_w = self.mse(w[obj_mask], tw[obj_mask]) * self.wh
                 loss_h = self.mse(h[obj_mask], th[obj_mask]) * self.wh
                 loss_cls = self.cls_loss(cls[obj_mask], tcls[obj_mask]) * self.cls
+                loss_conf_obj = self.bce(conf[obj_mask], tconf[obj_mask])
             else:
                 loss_x = 0
                 loss_y = 0
                 loss_w = 0
                 loss_h = 0
                 loss_cls = 0
+                loss_conf_obj = 0
 
-            loss_conf_obj = self.bce(conf, tconf)
-            loss_conf = loss_conf_obj
-            loss_conf *= self.conf
+            if no_obj_mask.any():
+                loss_conf_noobj = self.bce(conf[no_obj_mask], tconf[no_obj_mask])
+            else:
+                loss_conf_noobj = 0
+
+            loss_conf = loss_conf_obj * self.obj + loss_conf_noobj * self.no_obj
 
             total_loss += loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls
 
@@ -86,6 +90,7 @@ class YOLOLoss(_Loss):
 
         # Output tensors
         obj_mask = torch.zeros(shape, device=device, dtype=torch.bool)
+        no_obj_mask = torch.zeros(shape, device=device, dtype=torch.bool)
         tx = torch.zeros(shape, device=device, dtype=torch.float32)
         ty = torch.zeros(shape, device=device, dtype=torch.float32)
         tw = torch.zeros(shape, device=device, dtype=torch.float32)
@@ -107,9 +112,16 @@ class YOLOLoss(_Loss):
         gw, gh = gwh.t()
         gi, gj = gxy.long().t()
 
+        # Objects masks
+        obj_mask[b, best_n, gj, gi] = 1
+        no_obj_mask = ~obj_mask
+
         for i, anchor_ious in enumerate(ious.t()):
-            c = anchor_ious > self.iou_thres
-            obj_mask[b[i], c, gj[i], gi[i]] = 1
+            c = anchor_ious < self.iou_thres
+            obj_mask[b[i], c, gj[i], gi[i]] = 0
+            no_obj_mask[b[i], c, gj[i], gi[i]] = 1
+            no_obj_mask[b[i], ~c, gj[i], gi[i]] = 0
+
 
         # Coordinates
         tx[b, best_n, gj, gi] = gx - gx.floor()
@@ -123,4 +135,4 @@ class YOLOLoss(_Loss):
         tcls[b, best_n, gj, gi, target_labels] = 1
 
         tconf = obj_mask.float()
-        return obj_mask, tx, ty, tw, th, tcls, tconf
+        return obj_mask, no_obj_mask, tx, ty, tw, th, tcls, tconf
