@@ -170,10 +170,8 @@ def build_targets(model, targets):
             iou, a = torch.stack(iou, 0).max(0)  # best iou and anchor
 
             # reject below threshold ious (OPTIONAL, increases P, lowers R)
-            reject = True
-            if reject:
-                j = iou > iou_thres
-                t, a, gwh = targets[j], a[j], gwh[j]
+            j = iou > iou_thres
+            t, a, gwh = targets[j], a[j], gwh[j]
 
         # Indices
         b, c = t[:, :2].long().t()  # target image, class

@@ -6,7 +6,7 @@ class YoloLayer(nn.Module):
     def __init__(self, anchors, num_classes=80, class_activation=None):
         super(YoloLayer, self).__init__()
 
-        self.anchors = torch.tensor(anchors)
+        self.anchors = torch.tensor(anchors, dtype=torch.float32)
         self.num_anchors = len(anchors)
         self.anchor_wh = 0
         self.num_classes = num_classes
@@ -34,15 +34,18 @@ class YoloLayer(nn.Module):
         )
 
         x[..., 0:2] = torch.sigmoid(x[..., 0:2])
+        x[..., 2:4] = torch.exp(x[..., 2:4])
 
         if self.cls_activation is not None:
             x[..., 5:] = self.cls_activation(x[..., 5:])
 
         if predict:
             x[..., :2] += self.grid_xy
-            x[..., 2:4] = torch.exp(x[..., 2:4]) * self.anchor_wh
+            x[..., 2:4] *= self.anchor_wh
             x[..., :4] = x[..., :4] * self.stride
             x[..., 4] = torch.sigmoid(x[..., 4])
+
+            x = x.view(batch_size, -1, self.num_classes + 5)
 
         return x
 
