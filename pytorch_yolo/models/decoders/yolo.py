@@ -1,8 +1,21 @@
 from torch import nn
 
-from pytorch_yolo.models.layers.darknet_layers import ConvBlock, MaxPool
+from pytorch_yolo.models.layers.darknet_layers import ConvBlock, MaxPool, set_weights
 from pytorch_yolo.models.layers.common import Concat, Upsample
 from pytorch_yolo.models.layers.yolo_layer import YoloLayer
+
+
+def _load_weights(sequence, weights):
+    for layer in sequence:
+        if isinstance(layer, (ConvBlock, )):
+            weights = layer.load_darknet_weights(weights)
+        elif isinstance(layer, nn.Sequential):
+            weights = _load_weights(layer, weights)
+        elif isinstance(layer, nn.Conv2d):
+            weights = set_weights(layer.bias, weights)
+            weights = set_weights(layer.weight, weights)
+
+    return weights
 
 
 class BaseYoloDecoder(nn.Module):
@@ -12,6 +25,9 @@ class BaseYoloDecoder(nn.Module):
         self.anchors = anchors
         self.num_classes = num_classes
         self.yolo_layers = [YoloLayer(a, num_classes, activation) for a in anchors]
+
+    def load_darknet_weights(self, weights):
+        raise NotImplementedError()
 
 
 class TinyV3Decoder(BaseYoloDecoder):
@@ -84,8 +100,8 @@ class YoloV3Decoder(BaseYoloDecoder):
         self.sub_head3, self.head3 = self._make_last_layers(in_channels[2], channels[2], self.yolo3.input_channels)
 
         self.concat = Concat(dim=1)
-        self.up2 = nn.Sequential(ConvBlock(channels[2], channels[1], 1), Upsample(2))
-        self.up1 = nn.Sequential(ConvBlock(channels[1], channels[0], 1), Upsample(2))
+        self.up2 = nn.Sequential(ConvBlock(in_channels[1], channels[1], 1), Upsample(2))
+        self.up1 = nn.Sequential(ConvBlock(in_channels[0], channels[0], 1), Upsample(2))
 
     def _make_last_layers(self, in_channels, num_channels, yolo_input_channels):
         double_channels = num_channels * 2
@@ -126,6 +142,20 @@ class YoloV3Decoder(BaseYoloDecoder):
         y1 = self.yolo1(x1, img_size, predict=predict)
 
         return y1, y2, y3
+
+    def load_darknet_weights(self, weights):
+        weights = _load_weights(self.sub_head3, weights)
+        weights = _load_weights(self.head3, weights)
+
+        weights = _load_weights(self.up2, weights)
+        weights = _load_weights(self.sub_head2, weights)
+        weights = _load_weights(self.head2, weights)
+
+        weights = _load_weights(self.up1, weights)
+        weights = _load_weights(self.sub_head1, weights)
+        weights = _load_weights(self.head1, weights)
+
+        return weights
 
 
 class YoloV3SppDecoder(BaseYoloDecoder):

@@ -37,6 +37,19 @@ class DarknetTinyV3(Encoder):
 
         return outputs
 
+    @staticmethod
+    def _load_weights(sequence, weights):
+        for layer in sequence:
+            if isinstance(layer, (ConvBlock, ConvMaxPool)):
+                weights = layer.load_darknet_weights(weights)
+            elif isinstance(layer, nn.Sequential):
+                weights = DarknetTinyV3._load_weights(layer, weights)
+
+        return weights
+
+    def load_darknet_weights(self, weights):
+        return self._load_weights(self.sequence, weights)
+
 
 class DarknetV3(Encoder):
     def __init__(
@@ -72,3 +85,9 @@ class DarknetV3(Encoder):
                 outputs.append(x)
 
         return outputs
+
+    def load_darknet_weights(self, weights):
+        for layer in self.sequence:
+            weights = layer.load_darknet_weights(weights)
+
+        return weights

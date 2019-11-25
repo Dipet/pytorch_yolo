@@ -1,7 +1,22 @@
+import torch
+
 from torch import nn
-from collections import OrderedDict
 
 from pytorch_yolo.models.layers.common import Add
+
+
+def get_weights(weights, num):
+    return weights[:num], weights[num:]
+
+
+def set_weights(tensor: torch.Tensor, weights):
+    n = tensor.numel()
+
+    w, weights = get_weights(weights, n)
+    w = torch.from_numpy(w).view_as(tensor)
+    tensor.data.copy_(w)
+
+    return weights
 
 
 class ConvBlock(nn.Module):
@@ -10,30 +25,36 @@ class ConvBlock(nn.Module):
 
         conv_pad = (size - 1) // 2 if pad else 0
 
-        self.sequence = nn.Sequential(
-            OrderedDict(
-                [
-                    [
-                        "conv",
-                        nn.Conv2d(
-                            in_channels=in_channels,
-                            out_channels=out_channels,
-                            kernel_size=size,
-                            stride=stride,
-                            padding=conv_pad,
-                            bias=False,
-                        ),
-                    ],
-                    ["batch_norm", nn.BatchNorm2d(out_channels)],
-                    ["activation", nn.LeakyReLU(0.1, inplace=True)],
-                ]
-            )
+        self.conv = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=size,
+            stride=stride,
+            padding=conv_pad,
+            bias=False,
         )
+        self.batch_norm = nn.BatchNorm2d(out_channels)
+        self.activation = nn.LeakyReLU(0.1, inplace=True)
 
         self.out_channels = out_channels
 
     def forward(self, x):
-        return self.sequence(x)
+        x = self.conv(x)
+        x = self.batch_norm(x)
+        return self.activation(x)
+
+    def _load_batch_norm_weights(self, weights):
+        weights = set_weights(self.batch_norm.bias, weights)
+        weights = set_weights(self.batch_norm.weight, weights)
+        weights = set_weights(self.batch_norm.running_mean, weights)
+        weights = set_weights(self.batch_norm.running_var, weights)
+        return weights
+
+    def load_darknet_weights(self, weights):
+        weights = self._load_batch_norm_weights(weights)
+        weights = set_weights(self.conv.weight, weights)
+
+        return weights
 
 
 class MaxPool(nn.MaxPool2d):
@@ -57,6 +78,10 @@ class ConvMaxPool(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         return self.pool(x)
+
+    def load_darknet_weights(self, weights):
+        weights = self.conv.load_darknet_weights(weights)
+        return weights
 
 
 class ResBlock(nn.Module):
@@ -95,3 +120,12 @@ class ResBlock(nn.Module):
     @property
     def out_channels(self):
         return self._out_channels
+
+    def load_darknet_weights(self, weights):
+        weights = self.conv0.load_darknet_weights(weights)
+
+        for sequence in self.tail:
+            for layer in sequence:
+                weights = layer.load_darknet_weights(weights)
+
+        return weights
