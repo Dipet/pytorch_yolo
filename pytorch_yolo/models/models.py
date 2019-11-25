@@ -24,7 +24,7 @@ class YoloBaseModel(nn.Module):
 
     def load_darknet_weights(self, path):
         with open(path, "rb") as file:
-            np.fromfile(file, dtype=np.float32, count=5)  # header
+            np.fromfile(file, dtype=np.int32, count=5)  # header
             weights = np.fromfile(file, dtype=np.float32)
 
         weights = self.encoder.load_darknet_weights(weights)
