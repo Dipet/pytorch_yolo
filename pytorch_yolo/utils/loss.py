@@ -21,118 +21,126 @@ def wh_iou(box1, box2):
 
 
 class YOLOLoss(_Loss):
-    def __init__(self, yolo_layers, binary=False, xy=1, wh=1, cls=1, obj=1, no_obj=1, iou_thres=0.1, cls_weights=None,
+    def __init__(self, yolo_layers, bbox_weight=1, cls_weight=10, obj_weight=10, iou_thres=0.1,
                  cls_loss=nn.BCEWithLogitsLoss()):
         super().__init__()
-        self.xy = xy
-        self.wh = wh
-        self.cls = cls
-        self.obj = obj
-        self.no_obj = no_obj
+        self.bbox_weight = bbox_weight
+        self.cls_weight = cls_weight
+        self.obj_weight = obj_weight
 
         self.yolo_layers = yolo_layers
 
         self.iou_thres = iou_thres
-        self.binary = binary
-        self.cls_weights = cls_weights
         self.cls_loss = cls_loss
 
         self.mse = nn.MSELoss()
         self.bce = nn.BCEWithLogitsLoss()
 
+    @staticmethod
+    def bbox_iou(box1, box2):
+        eps = torch.finfo(box1.dtype).eps
+        max_val = torch.finfo(box1.dtype).max
+
+        # Returns the IoU of box1 to box2. box1 is 4, box2 is nx4
+        box2 = box2.t()
+
+        # Get the coordinates of bounding boxes
+        b1_x1, b1_x2 = box1[0] - box1[2] / 2, box1[0] + box1[2] / 2
+        b1_y1, b1_y2 = box1[1] - box1[3] / 2, box1[1] + box1[3] / 2
+        b2_x1, b2_x2 = box2[0] - box2[2] / 2, box2[0] + box2[2] / 2
+        b2_y1, b2_y2 = box2[1] - box2[3] / 2, box2[1] + box2[3] / 2
+
+        # Intersection area
+        inter_area = (torch.min(b1_x2, b2_x2) - torch.max(b1_x1, b2_x1)).clamp(0) * \
+                     (torch.min(b1_y2, b2_y2) - torch.max(b1_y1, b2_y1)).clamp(0)
+
+        # Union Area
+        w1, h1 = b1_x2 - b1_x1, b1_y2 - b1_y1
+        w2, h2 = b2_x2 - b2_x1, b2_y2 - b2_y1
+        union_area = w1 * h1 + w2 * h2 - inter_area
+        union_area = torch.clamp(union_area, eps, max_val)
+
+        iou = inter_area / union_area  # iou
+
+        cw = torch.max(b1_x2, b2_x2) - torch.min(b1_x1, b2_x1)  # convex (smallest enclosing box) width
+        ch = torch.max(b1_y2, b2_y2) - torch.min(b1_y1, b2_y1)  # convex height
+
+        # Generalized IoU https://arxiv.org/pdf/1902.09630.pdf
+        c_area = torch.clamp(cw * ch, eps, max_val)  # convex area
+        iou = iou - (c_area - union_area) / c_area  # GIoU
+
+        return iou
+
     def forward(self, y_pred, y_true):
-        total_loss = 0
+        loss = 0
 
+        # Compute losses
         for pred, yolo in zip(y_pred, self.yolo_layers):
-            anchors = torch.tensor(yolo.scaled_anchors, dtype=torch.float32, device=pred.device)
-            obj_mask, no_obj_mask, tx, ty, tw, th, tcls, tconf = self.build_targets(pred, y_true, anchors)
+            anchors = torch.tensor(yolo.scaled_anchors, dtype=pred.dtype, device=pred.device)
+            target_cls, target_bbox, indices, targets_anchors = self.build_targets(pred, y_true, anchors)
 
-            x = pred[..., 0]
-            y = pred[..., 1]
-            h = pred[..., 2]
-            w = pred[..., 3]
-            conf = pred[..., 4]
-            cls = pred[..., 5:]
+            image, anchor, grid_y, grid_x = indices
+            target_obj = torch.zeros_like(pred[..., 0])
 
-            # Loss : Mask outputs to ignore non-existing objects (except with conf. loss)
-            if obj_mask.any():
-                loss_x = self.mse(x[obj_mask], tx[obj_mask]) * self.xy
-                loss_y = self.mse(y[obj_mask], ty[obj_mask]) * self.xy
-                loss_w = self.mse(w[obj_mask], tw[obj_mask]) * self.wh
-                loss_h = self.mse(h[obj_mask], th[obj_mask]) * self.wh
-                loss_cls = self.cls_loss(cls[obj_mask], tcls[obj_mask]) * self.cls
-                loss_conf_obj = self.bce(conf[obj_mask], tconf[obj_mask])
+            # Compute losses
+            num_targets = len(image)
+            if num_targets:
+                pred_subset = pred[image, anchor, grid_y, grid_x]  # prediction subset corresponding to targets
+                target_obj[image, anchor, grid_y, grid_x] = 1.0  # obj
+
+                # GIoU
+                pxy = pred_subset[:, 0:2]
+                pbox = torch.cat((pxy, pred_subset[:, 2:4].clamp(max=1E4) * targets_anchors), 1)  # predicted box
+                giou = self.bbox_iou(pbox.t(), target_bbox)  # giou computation
+                loss_bbox = (1.0 - giou).mean()  # giou loss
+
+                t = torch.zeros_like(pred_subset[:, 5:])  # targets
+                t[range(num_targets), target_cls] = 1.0
+                loss_cls = self.bce(pred_subset[:, 5:], t)
             else:
-                loss_x = 0
-                loss_y = 0
-                loss_w = 0
-                loss_h = 0
+                loss_bbox = 0
                 loss_cls = 0
-                loss_conf_obj = 0
 
-            if no_obj_mask.any():
-                loss_conf_noobj = self.bce(conf[no_obj_mask], tconf[no_obj_mask])
-            else:
-                loss_conf_noobj = 0
+            loss_obj = self.bce(pred[..., 4], target_obj)
 
-            loss_conf = loss_conf_obj * self.obj + loss_conf_noobj * self.no_obj
+            loss_bbox *= self.bbox_weight
+            loss_obj *= self.obj_weight
+            loss_cls *= self.cls_weight
 
-            total_loss += loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls
+            loss += loss_bbox + loss_obj + loss_cls
 
-        return total_loss
+        return loss
 
     def build_targets(self, logits, targets, anchors):
-        shape = logits.shape[:-1]
-        num_classes = logits.shape[-1] - 5
         device = logits.device
+        num_targets = len(targets)
+        num_grids = torch.tensor(logits.shape[-3:-1], device=device, dtype=logits.dtype)
+        targets = targets.to(logits.dtype)
 
-        nG = torch.tensor(logits.shape[-3:-1], device=device, dtype=torch.float32)
+        # iou of targets-anchors
+        t, targets_anchors = targets, []
+        gwh = t[:, 4:6] * num_grids
+        if num_targets:
+            iou = torch.stack([wh_iou(x, gwh) for x in anchors], 0)
 
-        # Output tensors
-        obj_mask = torch.zeros(shape, device=device, dtype=torch.bool)
-        no_obj_mask = torch.zeros(shape, device=device, dtype=torch.bool)
-        tx = torch.zeros(shape, device=device, dtype=torch.float32)
-        ty = torch.zeros(shape, device=device, dtype=torch.float32)
-        tw = torch.zeros(shape, device=device, dtype=torch.float32)
-        th = torch.zeros(shape, device=device, dtype=torch.float32)
-        tcls = torch.zeros(shape + (num_classes, ), device=device, dtype=torch.float32)
+            na = len(anchors)
+            targets_anchors = torch.arange(na).view((-1, 1)).repeat([1, num_targets]).view(-1)
+            t = targets.repeat([na, 1])
+            gwh = gwh.repeat([na, 1])
+            iou = iou.view(-1)  # use all ious
 
-        # Convert to position relative to box
-        target_boxes = targets[:, 2:6]
-        gxy = target_boxes[:, :2] * nG
-        gwh = target_boxes[:, 2:] * nG
+            # reject anchors below iou_thres (OPTIONAL, increases P, lowers R)
+            j = iou > self.iou_thres
+            t, targets_anchors, gwh = t[j], targets_anchors[j], gwh[j]
 
-        # Get anchors with best iou
-        ious = torch.stack([wh_iou(anchor, gwh) for anchor in anchors])
-        best_ious, best_n = ious.max(0)
+        # Indices
+        b, target_cls = t[:, :2].long().t()  # target image, class
+        gxy = t[:, 2:4] * num_grids  # grid x, y
+        gi, gj = gxy.long().t()  # grid x, y indices
+        indices = (b, targets_anchors, gj, gi)
 
-        # Separate target values
-        b, target_labels = targets[:, :2].long().t()
-        gx, gy = gxy.t()
-        gw, gh = gwh.t()
-        gi, gj = gxy.long().t()
+        # GIoU
+        gxy -= gxy.floor()  # xy
+        target_bbox = torch.cat((gxy, gwh), 1)  # xywh (grids)
 
-        # Objects masks
-        obj_mask[b, best_n, gj, gi] = 1
-        no_obj_mask = ~obj_mask
-
-        for i, anchor_ious in enumerate(ious.t()):
-            c = anchor_ious < self.iou_thres
-            obj_mask[b[i], c, gj[i], gi[i]] = 0
-            no_obj_mask[b[i], c, gj[i], gi[i]] = 1
-            no_obj_mask[b[i], ~c, gj[i], gi[i]] = 0
-
-
-        # Coordinates
-        tx[b, best_n, gj, gi] = gx - gx.floor()
-        ty[b, best_n, gj, gi] = gy - gy.floor()
-
-        # Width and height
-        tw[b, best_n, gj, gi] = torch.log(gw / anchors[best_n][:, 0] + 1e-16)
-        th[b, best_n, gj, gi] = torch.log(gh / anchors[best_n][:, 1] + 1e-16)
-
-        # One-hot encoding of label
-        tcls[b, best_n, gj, gi, target_labels] = 1
-
-        tconf = obj_mask.float()
-        return obj_mask, no_obj_mask, tx, ty, tw, th, tcls, tconf
+        return target_cls, target_bbox, indices, anchors[targets_anchors]
