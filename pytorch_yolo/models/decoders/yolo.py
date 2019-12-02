@@ -100,8 +100,8 @@ class YoloV3Decoder(BaseYoloDecoder):
         self.sub_head3, self.head3 = self._make_last_layers(in_channels[2], channels[2], self.yolo3.input_channels)
 
         self.concat = Concat(dim=1)
-        self.up2 = nn.Sequential(ConvBlock(in_channels[1], channels[1], 1), Upsample(2))
-        self.up1 = nn.Sequential(ConvBlock(in_channels[0], channels[0], 1), Upsample(2))
+        self.up2 = nn.Sequential(ConvBlock(channels[2], channels[1], 1), Upsample(2))
+        self.up1 = nn.Sequential(ConvBlock(channels[1], channels[0], 1), Upsample(2))
 
     def _make_last_layers(self, in_channels, num_channels, yolo_input_channels):
         double_channels = num_channels * 2

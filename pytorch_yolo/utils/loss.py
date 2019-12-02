@@ -21,17 +21,21 @@ def wh_iou(box1, box2):
 
 
 class YOLOLoss(_Loss):
-    def __init__(self, yolo_layers, bbox_weight=1, cls_weight=10, obj_weight=10, iou_thres=0.1,
-                 cls_loss=nn.BCEWithLogitsLoss()):
+    def __init__(self, yolo_layers, bbox_weight=1, cls_weight=10, obj_weight=1, no_obj_weight=10, iou_thres=0.1,
+                 cls_loss=nn.BCEWithLogitsLoss(), extended=False):
         super().__init__()
         self.bbox_weight = bbox_weight
         self.cls_weight = cls_weight
+
         self.obj_weight = obj_weight
+        self.no_obj_weight = no_obj_weight
 
         self.yolo_layers = yolo_layers
 
         self.iou_thres = iou_thres
         self.cls_loss = cls_loss
+
+        self.extended = extended
 
         self.mse = nn.MSELoss()
         self.bce = nn.BCEWithLogitsLoss()
@@ -72,6 +76,7 @@ class YOLOLoss(_Loss):
         return iou
 
     def forward(self, y_pred, y_true):
+        loss_dict = {}
         loss = 0
 
         # Compute losses
@@ -101,13 +106,40 @@ class YOLOLoss(_Loss):
                 loss_bbox = 0
                 loss_cls = 0
 
-            loss_obj = self.bce(pred[..., 4], target_obj)
+            obj_mask = torch.zeros_like(target_obj, dtype=torch.bool)
+            obj_mask[image, anchor, grid_y, grid_x] = True
+
+            no_obj_mask = ~obj_mask
+
+            loss_has_obj = self.bce(pred[..., 4][obj_mask], target_obj[obj_mask]) * self.obj_weight
+            loss_no_obj = self.bce(pred[..., 4][no_obj_mask], target_obj[no_obj_mask]) * self.no_obj_weight
+            loss_obj =  loss_has_obj + loss_no_obj
 
             loss_bbox *= self.bbox_weight
-            loss_obj *= self.obj_weight
             loss_cls *= self.cls_weight
 
             loss += loss_bbox + loss_obj + loss_cls
+
+            ngrids = pred.shape[-3:-1]
+            if ngrids not in loss_dict:
+                loss_dict[ngrids] = {
+                    'loss': 0,
+                    'bbox': 0,
+                    'obj': 0,
+                    'has_obj': 0,
+                    'no_obj': 0,
+                    'cls': 0
+                }
+
+            loss_dict[ngrids]['obj'] += float(loss_obj)
+            loss_dict[ngrids]['has_obj'] += float(loss_has_obj)
+            loss_dict[ngrids]['no_obj'] += float(loss_no_obj)
+            loss_dict[ngrids]['bbox'] += float(loss_bbox)
+            loss_dict[ngrids]['cls'] += float(loss_cls)
+            loss_dict[ngrids]['loss'] += float(loss_obj) + float(loss_bbox) + float(loss_cls)
+
+        if self.extended:
+            return loss, loss_dict
 
         return loss
 
