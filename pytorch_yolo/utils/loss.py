@@ -22,7 +22,8 @@ def wh_iou(box1, box2):
 
 class YOLOLoss(_Loss):
     def __init__(self, yolo_layers, bbox_weight=1, cls_weight=10, obj_weight=1, no_obj_weight=10, iou_thres=0.1,
-                 cls_loss=nn.BCEWithLogitsLoss(), extended=False):
+                 cls_loss=nn.BCEWithLogitsLoss(), extended=False,
+                 best_anchors=False):
         super().__init__()
         self.bbox_weight = bbox_weight
         self.cls_weight = cls_weight
@@ -34,6 +35,8 @@ class YOLOLoss(_Loss):
 
         self.iou_thres = iou_thres
         self.cls_loss = cls_loss
+
+        self.best_anchors = best_anchors
 
         self.extended = extended
 
@@ -155,11 +158,14 @@ class YOLOLoss(_Loss):
         if num_targets:
             iou = torch.stack([wh_iou(x, gwh) for x in anchors], 0)
 
-            na = len(anchors)
-            targets_anchors = torch.arange(na).view((-1, 1)).repeat([1, num_targets]).view(-1)
-            t = targets.repeat([na, 1])
-            gwh = gwh.repeat([na, 1])
-            iou = iou.view(-1)  # use all ious
+            if self.best_anchors:
+                iou, targets_anchors = iou.max(0)
+            else:
+                na = len(anchors)
+                targets_anchors = torch.arange(na).view((-1, 1)).repeat([1, num_targets]).view(-1)
+                t = targets.repeat([na, 1])
+                gwh = gwh.repeat([na, 1])
+                iou = iou.view(-1)  # use all ious
 
             # reject anchors below iou_thres (OPTIONAL, increases P, lowers R)
             j = iou > self.iou_thres
