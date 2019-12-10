@@ -23,7 +23,7 @@ def wh_iou(box1, box2):
 class YOLOLoss(_Loss):
     def __init__(self, yolo_layers, bbox_weight=1, cls_weight=10, obj_weight=1, no_obj_weight=10, iou_thres=0.1,
                  cls_loss=nn.BCEWithLogitsLoss(), extended=False,
-                 best_anchors=False):
+                 best_anchors=False, best_all_anchors=False):
         super().__init__()
         self.bbox_weight = bbox_weight
         self.cls_weight = cls_weight
@@ -37,6 +37,7 @@ class YOLOLoss(_Loss):
         self.cls_loss = cls_loss
 
         self.best_anchors = best_anchors
+        self.best_all_anchors = best_all_anchors
 
         self.extended = extended
 
@@ -81,11 +82,14 @@ class YOLOLoss(_Loss):
     def forward(self, y_pred, y_true):
         loss_dict = {}
         loss = 0
+        dtype = y_pred[0].dtype
+        device = y_pred[0].device
+        all_anchors = [torch.tensor(yolo.scaled_anchors, dtype=dtype, device=device) for yolo in self.yolo_layers]
+        all_num_grids = [torch.tensor(logits.shape[-3:-1], device=device, dtype=dtype) for logits in y_pred]
 
         # Compute losses
-        for pred, yolo in zip(y_pred, self.yolo_layers):
-            anchors = torch.tensor(yolo.scaled_anchors, dtype=pred.dtype, device=pred.device)
-            target_cls, target_bbox, indices, targets_anchors = self.build_targets(pred, y_true, anchors)
+        for pred, num_grids, anchors in zip(y_pred, all_num_grids, all_anchors):
+            target_cls, target_bbox, indices, targets_anchors = self.build_targets(num_grids, all_num_grids, y_true, anchors, all_anchors, dtype)
 
             image, anchor, grid_y, grid_x = indices
             target_obj = torch.zeros_like(pred[..., 0])
@@ -146,19 +150,24 @@ class YOLOLoss(_Loss):
 
         return loss
 
-    def build_targets(self, logits, targets, anchors):
-        device = logits.device
+    def build_targets(self, num_grids, all_num_grids, targets, anchors, all_anchors, dtype):
         num_targets = len(targets)
-        num_grids = torch.tensor(logits.shape[-3:-1], device=device, dtype=logits.dtype)
-        targets = targets.to(logits.dtype)
+        targets = targets.to(dtype)
+        anchors = anchors.to(dtype)
 
         # iou of targets-anchors
         t, targets_anchors = targets, []
         gwh = t[:, 4:6] * num_grids
         if num_targets:
             iou = torch.stack([wh_iou(x, gwh) for x in anchors], 0)
+            other_iou = []
 
-            if self.best_anchors:
+            if self.best_all_anchors:
+                other_iou = [torch.stack([wh_iou(x, t[:, 4:6] * ng) for x in a], 0) for a, ng in zip(all_anchors, all_num_grids) if (a != anchors).any()]
+                other_iou = [i.max(0).values for i in other_iou]
+
+                iou, targets_anchors = iou.max(0)
+            elif self.best_anchors:
                 iou, targets_anchors = iou.max(0)
             else:
                 na = len(anchors)
@@ -169,6 +178,9 @@ class YOLOLoss(_Loss):
 
             # reject anchors below iou_thres (OPTIONAL, increases P, lowers R)
             j = iou > self.iou_thres
+            if self.best_all_anchors:
+                for i in other_iou:
+                    j &= iou >= i
             t, targets_anchors, gwh = t[j], targets_anchors[j], gwh[j]
 
         # Indices
