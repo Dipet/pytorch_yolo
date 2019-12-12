@@ -75,7 +75,7 @@ class YOLOLoss(_Loss):
 
         # Generalized IoU https://arxiv.org/pdf/1902.09630.pdf
         c_area = torch.clamp(cw * ch, eps, max_val)  # convex area
-        iou = iou - (c_area - union_area) / c_area  # GIoU
+        iou = iou - 1 + union_area / c_area  # GIoU
 
         return iou
 
@@ -108,6 +108,7 @@ class YOLOLoss(_Loss):
 
                 t = torch.zeros_like(pred_subset[:, 5:])  # targets
                 t[range(num_targets), target_cls] = 1.0
+
                 loss_cls = self.bce(pred_subset[:, 5:], t)
             else:
                 loss_bbox = 0
@@ -118,8 +119,14 @@ class YOLOLoss(_Loss):
 
             no_obj_mask = ~obj_mask
 
-            loss_has_obj = self.bce(pred[..., 4][obj_mask], target_obj[obj_mask]) * self.obj_weight
-            loss_no_obj = self.bce(pred[..., 4][no_obj_mask], target_obj[no_obj_mask]) * self.no_obj_weight
+            if obj_mask.any():
+                loss_has_obj = self.bce(pred[..., 4][obj_mask], target_obj[obj_mask]) * self.obj_weight
+            else:
+                loss_has_obj = 0
+            if no_obj_mask.any():
+                loss_no_obj = self.bce(pred[..., 4][no_obj_mask], target_obj[no_obj_mask]) * self.no_obj_weight
+            else:
+                loss_no_obj = 0
             loss_obj =  loss_has_obj + loss_no_obj
 
             loss_bbox *= self.bbox_weight
@@ -144,6 +151,9 @@ class YOLOLoss(_Loss):
             loss_dict[ngrids]['bbox'] += float(loss_bbox)
             loss_dict[ngrids]['cls'] += float(loss_cls)
             loss_dict[ngrids]['loss'] += float(loss_obj) + float(loss_bbox) + float(loss_cls)
+
+            if torch.isnan(loss).any() or not torch.isfinite(loss).any():
+                raise ValueError("Nan in loss")
 
         if self.extended:
             return loss, loss_dict
