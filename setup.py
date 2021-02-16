@@ -6,23 +6,21 @@ from pkg_resources import DistributionNotFound, get_distribution
 
 
 INSTALL_REQUIRES = [
-    'torch>=1.2.0',
-    'efficientnet-pytorch>=0.2.0',
-    'matplotlib>=2.2.3',
-    'numpy>=1.16.3',
-    'pycocotools>=2.1',
-    'tensorboardX>=1.9',
-    'torchvision>=0.3.0',
-    'tqdm'
+    "torch>=1.2.0",
+    "efficientnet-pytorch>=0.2.0",
+    "matplotlib>=2.2.3",
+    "numpy>=1.16.3",
+    "pycocotools>=2.1",
+    "tensorboardX>=1.9",
+    "torchvision>=0.3.0",
+    "tqdm",
 ]
-CHOOSE_INSTALL_REQUIRES = [
-    ['opencv-python', 'opencv-python-headless',]
-]
+CHOOSE_INSTALL_REQUIRES = [["opencv-python", "opencv-python-headless"]]
 
 
 def get_version():
     current_dir = os.path.abspath(os.path.dirname(__file__))
-    version_file = os.path.join(current_dir, "albumentations", "__init__.py")
+    version_file = os.path.join(current_dir, "pytorch_yolo", "__init__.py")
     with io.open(version_file, encoding="utf-8") as f:
         return re.search(r'^__version__ = [\'"]([^\'"]*)[\'"]', f.read(), re.M).group(1)
 

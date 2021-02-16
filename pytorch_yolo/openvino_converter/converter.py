@@ -4,10 +4,10 @@ from torch import jit
 from torch import onnx
 from tensorboardX.pytorch_graph import NodePyIO, NodePyOP
 
-from pytorch_yolo.openvino_converter import ModelGraph
+from pytorch_yolo.openvino_converter.graph import ModelGraph
 
 
-__all__ = ['OpenVINOConverter']
+__all__ = ["OpenVINOConverter"]
 
 
 class OpenVINOConverter:
@@ -26,7 +26,7 @@ class OpenVINOConverter:
                     continue
 
             if i < n_inputs:
-                model_graph.append(NodePyIO(node, 'input'))
+                model_graph.append(NodePyIO(node, "input"))
             else:
                 model_graph.append(NodePyIO(node))  # parameter
 
@@ -34,7 +34,7 @@ class OpenVINOConverter:
             model_graph.append(NodePyOP(node))
 
         for node in graph.outputs():  # must place last.
-            NodePyIO(node, 'output')
+            NodePyIO(node, "output")
         model_graph.find_common_root()
         model_graph.populate_namespace_from_OP_to_IO()
 
@@ -45,45 +45,9 @@ class OpenVINOConverter:
         return model_graph, openvino_graph
 
     @staticmethod
-    def save(model, args, name, save_dir=''):
+    def save(model, args, name, save_dir=""):
         try:
             _, nodes = OpenVINOConverter.parse(model, args)
         except:
             _, nodes = OpenVINOConverter.parse(model, args)
         nodes.save(name, save_dir)
-
-
-if __name__ == '__main__':
-    from torch import nn
-
-    class Model(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.conv = nn.Conv2d(3, 3, 3)
-
-        def forward(self, x):
-            return self.conv(x)
-
-
-    from pytorch_yolo.models import LiteYOLOv3
-
-    device = 'cpu'
-    img_size = 416
-    in_channels = 3
-    divider = 1
-    input_shape = (1, in_channels, img_size, img_size)
-    from torchsummary import summary
-
-    model = LiteYOLOv3(n_class=1, in_channels=in_channels, onnx=True, in_shape=input_shape, kernels_divider=divider,
-                      anchors=[[(10, 13), (16, 30), (33, 23)],
-                               [(30, 61), (62, 45), (59, 119)],
-                               [(116, 90), (156, 198), (373, 326)]]
-                      ).to(device).eval()
-    model.fuse()
-    # model = Model().to(device).eval()
-    summary(model, input_shape[1:], device=device, batch_size=1)
-    # writer = SummaryWriter()
-    dummy = torch.rand(input_shape).to(device)
-    # import torch
-    # torch.onnx.export(model, dummy, 'test.onnx')
-    OpenVINOConverter.save(model, dummy, 'test')
